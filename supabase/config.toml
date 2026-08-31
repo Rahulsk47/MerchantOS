@@ -1,0 +1,27 @@
+[functions.evaluate-transaction]
+verify_jwt = true
+entrypoint = "./functions/evaluate-transaction/index.ts"
+
+[functions.create-open-tab]
+verify_jwt = true
+entrypoint = "./functions/create-open-tab/index.ts"
+
+[functions.approve-transaction]
+verify_jwt = true
+entrypoint = "./functions/approve-transaction/index.ts"
+
+[functions.decline-transaction]
+verify_jwt = true
+entrypoint = "./functions/decline-transaction/index.ts"
+
+[functions.verify-agent]
+verify_jwt = true
+entrypoint = "./functions/verify-agent/index.ts"
+
+[functions.analyze-catalog-readiness]
+verify_jwt = true
+entrypoint = "./functions/analyze-catalog-readiness/index.ts"
+
+[functions.simulate-payment]
+verify_jwt = true
+entrypoint = "./functions/simulate-payment/index.ts"
