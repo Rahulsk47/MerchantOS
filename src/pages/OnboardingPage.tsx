@@ -1,11 +1,10 @@
 import {
   useEffect,
   useState,
+  type FormEvent,
 } from 'react';
 
-import {
-  useNavigate,
-} from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import {
   ArrowRight,
@@ -25,58 +24,78 @@ export default function OnboardingPage() {
     refreshData,
   } = useApp();
 
-  const [businessName, setBusinessName] =
-    useState(
-      merchant.businessName ?? ''
-    );
+  const [businessName, setBusinessName] = useState(
+    merchant.businessName ?? ''
+  );
 
-  const [industry, setIndustry] =
-    useState(
-      merchant.industry ?? ''
-    );
+  const [industry, setIndustry] = useState(
+    merchant.industry ?? ''
+  );
 
-  const [storeUrl, setStoreUrl] =
-    useState(
-      merchant.storeUrl ?? ''
-    );
+  const [storeUrl, setStoreUrl] = useState(
+    merchant.storeUrl ?? ''
+  );
 
-  const [contactEmail, setContactEmail] =
-    useState(
-      merchant.contactEmail ?? ''
-    );
+  const [contactEmail, setContactEmail] = useState(
+    merchant.contactEmail ?? ''
+  );
 
-  const [loading, setLoading] =
-    useState(false);
+  const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const [error, setError] = useState('');
 
-  const [checking, setChecking] =
-    useState(true);
-
-  const [error, setError] =
-    useState('');
-
-  /* ============================================================
-     CHECK AUTH
-  ============================================================ */
+  /*
+   * ------------------------------------------------------------
+   * CHECK AUTH
+   * ------------------------------------------------------------
+   */
 
   useEffect(() => {
     let mounted = true;
 
     const checkAuth = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      try {
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser();
 
-      if (!mounted) return;
+        if (!mounted) return;
 
-      if (!user) {
-        navigate('/signin', {
-          replace: true,
-        });
+        if (authError) {
+          console.error(
+            'Authentication check failed:',
+            authError
+          );
 
-        return;
+          navigate('/signin', {
+            replace: true,
+          });
+
+          return;
+        }
+
+        if (!user) {
+          navigate('/signin', {
+            replace: true,
+          });
+
+          return;
+        }
+
+        setChecking(false);
+      } catch (err) {
+        console.error(
+          'Auth check error:',
+          err
+        );
+
+        if (mounted) {
+          navigate('/signin', {
+            replace: true,
+          });
+        }
       }
-
-      setChecking(false);
     };
 
     void checkAuth();
@@ -86,14 +105,49 @@ export default function OnboardingPage() {
     };
   }, [navigate]);
 
-  /* ============================================================
-     SUBMIT
-  ============================================================ */
+  /*
+   * ------------------------------------------------------------
+   * NORMALIZE STORE URL
+   * ------------------------------------------------------------
+   */
+
+  const normalizeStoreUrl = (
+    value: string
+  ): string | null => {
+    const trimmed = value.trim();
+
+    if (!trimmed) {
+      return null;
+    }
+
+    try {
+      const url = trimmed.startsWith('http://') ||
+        trimmed.startsWith('https://')
+        ? trimmed
+        : `https://${trimmed}`;
+
+      new URL(url);
+
+      return url;
+    } catch {
+      throw new Error(
+        'Please enter a valid store URL.'
+      );
+    }
+  };
+
+  /*
+   * ------------------------------------------------------------
+   * SUBMIT ONBOARDING
+   * ------------------------------------------------------------
+   */
 
   const handleSubmit = async (
-    event: React.FormEvent
+    event: FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
+
+    if (loading) return;
 
     setError('');
 
@@ -103,9 +157,6 @@ export default function OnboardingPage() {
     const cleanIndustry =
       industry.trim();
 
-    const cleanStoreUrl =
-      storeUrl.trim();
-
     const cleanContactEmail =
       contactEmail.trim();
 
@@ -113,7 +164,6 @@ export default function OnboardingPage() {
       setError(
         'Please enter your business name.'
       );
-
       return;
     }
 
@@ -121,16 +171,29 @@ export default function OnboardingPage() {
       setError(
         'Please enter your industry.'
       );
+      return;
+    }
 
+    if (
+      cleanContactEmail &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        cleanContactEmail
+      )
+    ) {
+      setError(
+        'Please enter a valid business contact email.'
+      );
       return;
     }
 
     setLoading(true);
 
     try {
-      /* ========================================================
-         GET AUTH USER
-      ======================================================== */
+      /*
+       * ----------------------------------------------------------
+       * 1. GET CURRENT USER
+       * ----------------------------------------------------------
+       */
 
       const {
         data: { user },
@@ -138,7 +201,9 @@ export default function OnboardingPage() {
       } = await supabase.auth.getUser();
 
       if (userError) {
-        throw userError;
+        throw new Error(
+          `Authentication error: ${userError.message}`
+        );
       }
 
       if (!user) {
@@ -147,16 +212,27 @@ export default function OnboardingPage() {
         );
       }
 
-      /* ========================================================
-         CHECK EXISTING MEMBERSHIP
-      ======================================================== */
+      /*
+       * ----------------------------------------------------------
+       * 2. NORMALIZE STORE URL
+       * ----------------------------------------------------------
+       */
+
+      const cleanStoreUrl =
+        normalizeStoreUrl(storeUrl);
+
+      /*
+       * ----------------------------------------------------------
+       * 3. FIND EXISTING ORGANIZATION MEMBERSHIP
+       * ----------------------------------------------------------
+       */
 
       const {
-        data: existingMembership,
-        error: membershipLookupError,
+        data: membership,
+        error: membershipError,
       } = await supabase
         .from('organization_members')
-        .select('organization_id')
+        .select('organization_id, role')
         .eq('user_id', user.id)
         .order('created_at', {
           ascending: true,
@@ -164,34 +240,62 @@ export default function OnboardingPage() {
         .limit(1)
         .maybeSingle();
 
-      if (membershipLookupError) {
-        throw membershipLookupError;
+      if (membershipError) {
+        throw new Error(
+          `Unable to check your organization: ${membershipError.message}`
+        );
       }
 
       let organizationId =
-        existingMembership?.organization_id ??
-        null;
+        membership?.organization_id
+          ? String(membership.organization_id)
+          : null;
 
-      /* ========================================================
-         CREATE ORGANIZATION IF NEEDED
-      ======================================================== */
+      /*
+       * ----------------------------------------------------------
+       * 4. CREATE OR UPDATE ORGANIZATION
+       * ----------------------------------------------------------
+       */
 
-      if (!organizationId) {
+      if (organizationId) {
+        /*
+         * Existing organization
+         */
+
+        const {
+          error: updateError,
+        } = await supabase
+          .from('organizations')
+          .update({
+            name: cleanBusinessName,
+            industry: cleanIndustry,
+            store_url: cleanStoreUrl,
+            contact_email:
+              cleanContactEmail ||
+              user.email ||
+              null,
+          })
+          .eq('id', organizationId);
+
+        if (updateError) {
+          throw new Error(
+            `Unable to update organization: ${updateError.message}`
+          );
+        }
+      } else {
+        /*
+         * New organization
+         */
+
         const {
           data: organization,
-          error:
-            organizationError,
+          error: organizationError,
         } = await supabase
           .from('organizations')
           .insert({
             name: cleanBusinessName,
-
-            industry:
-              cleanIndustry,
-
-            store_url:
-              cleanStoreUrl || null,
-
+            industry: cleanIndustry,
+            store_url: cleanStoreUrl,
             contact_email:
               cleanContactEmail ||
               user.email ||
@@ -201,89 +305,67 @@ export default function OnboardingPage() {
           .single();
 
         if (organizationError) {
-          throw organizationError;
+          console.error(
+            'Organization creation failed:',
+            organizationError
+          );
+
+          throw new Error(
+            `Unable to create your organization: ${organizationError.message}`
+          );
         }
 
         if (!organization?.id) {
           throw new Error(
-            'Organization was created but no organization ID was returned.'
+            'Organization was created, but no organization ID was returned.'
           );
         }
 
-        organizationId =
-          String(organization.id);
+        organizationId = String(
+          organization.id
+        );
 
-        /* ======================================================
-           CREATE MEMBERSHIP
-        ====================================================== */
+        /*
+         * --------------------------------------------------------
+         * 5. CREATE OWNER MEMBERSHIP
+         * --------------------------------------------------------
+         */
 
         const {
-          error:
-            membershipError,
+          error: createMembershipError,
         } = await supabase
           .from('organization_members')
           .insert({
-            organization_id:
-              organizationId,
-
+            organization_id: organizationId,
             user_id: user.id,
-
             role: 'owner',
           });
 
-        if (membershipError) {
-          /* -----------------------------------------------
-             Cleanup orphan organization if membership
-             creation fails.
-          ------------------------------------------------ */
+        if (createMembershipError) {
+          console.error(
+            'Membership creation failed:',
+            createMembershipError
+          );
 
+          /*
+           * Best-effort cleanup.
+           */
           await supabase
             .from('organizations')
             .delete()
-            .eq(
-              'id',
-              organizationId
-            );
+            .eq('id', organizationId);
 
-          throw membershipError;
-        }
-      } else {
-        /* ======================================================
-           UPDATE EXISTING ORGANIZATION
-        ====================================================== */
-
-        const {
-          error:
-            organizationUpdateError,
-        } = await supabase
-          .from('organizations')
-          .update({
-            name: cleanBusinessName,
-
-            industry:
-              cleanIndustry,
-
-            store_url:
-              cleanStoreUrl || null,
-
-            contact_email:
-              cleanContactEmail ||
-              user.email ||
-              null,
-          })
-          .eq(
-            'id',
-            organizationId
+          throw new Error(
+            `Unable to create organization membership: ${createMembershipError.message}`
           );
-
-        if (organizationUpdateError) {
-          throw organizationUpdateError;
         }
       }
 
-      /* ========================================================
-         UPDATE LOCAL STATE
-      ======================================================== */
+      /*
+       * ----------------------------------------------------------
+       * 6. UPDATE LOCAL MERCHANT STATE
+       * ----------------------------------------------------------
+       */
 
       updateMerchant({
         businessName:
@@ -293,7 +375,7 @@ export default function OnboardingPage() {
           cleanIndustry,
 
         storeUrl:
-          cleanStoreUrl,
+          cleanStoreUrl ?? '',
 
         contactEmail:
           cleanContactEmail ||
@@ -303,54 +385,97 @@ export default function OnboardingPage() {
         onboardingComplete: true,
       });
 
-      /* ========================================================
-         REFRESH EVERYTHING FROM DATABASE
-      ======================================================== */
+      /*
+       * ----------------------------------------------------------
+       * 7. REFRESH DATA
+       * ----------------------------------------------------------
+       */
 
       await refreshData();
 
-      /* ========================================================
-         GO TO APP
-      ======================================================== */
+      /*
+       * ----------------------------------------------------------
+       * 8. GO TO MERCHANTOS
+       * ----------------------------------------------------------
+       */
 
       navigate('/app', {
         replace: true,
       });
     } catch (err) {
       console.error(
-        'Onboarding error:',
+        'Onboarding failed:',
         err
       );
 
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to complete onboarding. Please try again.'
-      );
+      let message =
+        'Unable to complete onboarding. Please try again.';
+
+      if (err instanceof Error) {
+        message = err.message;
+      }
+
+      /*
+       * Give a useful message for common Supabase/RLS errors.
+       */
+
+      if (
+        message.toLowerCase().includes(
+          'row-level security'
+        )
+      ) {
+        message =
+          'Supabase blocked organization creation because of Row Level Security. Please check the organizations INSERT policy.';
+      }
+
+      if (
+        message.toLowerCase().includes(
+          'permission denied'
+        )
+      ) {
+        message =
+          'Supabase denied access to the organization tables. Please check your RLS policies.';
+      }
+
+      if (
+        message.toLowerCase().includes(
+          'duplicate'
+        )
+      ) {
+        message =
+          'This account already has an organization. Please refresh and continue.';
+      }
+
+      setError(message);
     } finally {
       setLoading(false);
     }
   };
 
-  /* ============================================================
-     LOADING
-  ============================================================ */
+  /*
+   * ------------------------------------------------------------
+   * LOADING
+   * ------------------------------------------------------------
+   */
 
   if (checking) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin" />
+      <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-emerald-400" />
       </div>
     );
   }
 
-  /* ============================================================
-     UI
-  ============================================================ */
+  /*
+   * ------------------------------------------------------------
+   * UI
+   * ------------------------------------------------------------
+   */
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-2xl">
+
         {/* HEADER */}
 
         <div className="mb-10">
@@ -380,7 +505,8 @@ export default function OnboardingPage() {
           onSubmit={handleSubmit}
           className="space-y-6"
         >
-          {/* BUSINESS */}
+
+          {/* BUSINESS NAME */}
 
           <div>
             <label
@@ -392,6 +518,7 @@ export default function OnboardingPage() {
 
             <input
               id="businessName"
+              type="text"
               value={businessName}
               onChange={(event) =>
                 setBusinessName(
@@ -400,7 +527,8 @@ export default function OnboardingPage() {
               }
               placeholder="Acme Commerce"
               disabled={loading}
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3.5 text-white outline-none transition focus:border-emerald-500"
+              autoComplete="organization"
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3.5 text-white outline-none transition placeholder:text-zinc-600 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 disabled:opacity-60"
             />
           </div>
 
@@ -416,6 +544,7 @@ export default function OnboardingPage() {
 
             <input
               id="industry"
+              type="text"
               value={industry}
               onChange={(event) =>
                 setIndustry(
@@ -424,7 +553,7 @@ export default function OnboardingPage() {
               }
               placeholder="Fashion, electronics, beauty..."
               disabled={loading}
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3.5 text-white outline-none transition focus:border-emerald-500"
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3.5 text-white outline-none transition placeholder:text-zinc-600 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 disabled:opacity-60"
             />
           </div>
 
@@ -436,6 +565,7 @@ export default function OnboardingPage() {
               className="mb-2 block text-sm font-medium text-zinc-200"
             >
               Store URL
+
               <span className="ml-2 text-zinc-500">
                 optional
               </span>
@@ -443,7 +573,8 @@ export default function OnboardingPage() {
 
             <input
               id="storeUrl"
-              type="url"
+              type="text"
+              inputMode="url"
               value={storeUrl}
               onChange={(event) =>
                 setStoreUrl(
@@ -452,11 +583,12 @@ export default function OnboardingPage() {
               }
               placeholder="https://yourstore.com"
               disabled={loading}
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3.5 text-white outline-none transition focus:border-emerald-500"
+              autoComplete="url"
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3.5 text-white outline-none transition placeholder:text-zinc-600 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 disabled:opacity-60"
             />
           </div>
 
-          {/* EMAIL */}
+          {/* CONTACT EMAIL */}
 
           <div>
             <label
@@ -464,6 +596,7 @@ export default function OnboardingPage() {
               className="mb-2 block text-sm font-medium text-zinc-200"
             >
               Business contact email
+
               <span className="ml-2 text-zinc-500">
                 optional
               </span>
@@ -480,14 +613,18 @@ export default function OnboardingPage() {
               }
               placeholder="commerce@yourstore.com"
               disabled={loading}
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3.5 text-white outline-none transition focus:border-emerald-500"
+              autoComplete="email"
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3.5 text-white outline-none transition placeholder:text-zinc-600 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 disabled:opacity-60"
             />
           </div>
 
           {/* ERROR */}
 
           {error && (
-            <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            <div
+              role="alert"
+              className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-300"
+            >
               {error}
             </div>
           )}
@@ -513,6 +650,7 @@ export default function OnboardingPage() {
               </>
             )}
           </button>
+
         </form>
       </div>
     </div>

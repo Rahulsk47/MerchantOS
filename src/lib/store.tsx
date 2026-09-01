@@ -160,33 +160,79 @@ const avatarColors = [
 ];
 
 /* ============================================================
-   ENVIRONMENT
+   SUPABASE CONFIG
 ============================================================ */
 
 const SUPABASE_URL =
   import.meta.env.VITE_SUPABASE_URL as string | undefined;
 
 const SUPABASE_PUBLISHABLE_KEY =
-  import.meta.env
-    .VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
-
-/*
- * IMPORTANT:
- * store.tsx uses the same publishable key as supabase.ts.
- *
- * Do NOT use VITE_SUPABASE_ANON_KEY here.
- */
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as
+    | string
+    | undefined;
 
 function getSupabaseConfig() {
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
     throw new Error(
-      'Missing Supabase environment variables. Check your .env file for VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.'
+      'Missing Supabase environment variables. Check VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in your .env file.'
     );
   }
 
   return {
     url: SUPABASE_URL,
-    key: SUPABASE_PUBLISHABLE_KEY,
+    publishableKey: SUPABASE_PUBLISHABLE_KEY,
+  };
+}
+
+/* ============================================================
+   EDGE FUNCTION REQUEST
+============================================================ */
+
+async function callEdgeFunction<T>(
+  functionName: string,
+  accessToken: string,
+  body: unknown
+): Promise<{
+  response: Response;
+  result: T;
+}> {
+  const {
+    url,
+    publishableKey,
+  } = getSupabaseConfig();
+
+  const response = await fetch(
+    `${url}/functions/v1/${functionName}`,
+    {
+      method: 'POST',
+
+      headers: {
+        'Content-Type': 'application/json',
+
+        // User authentication
+        Authorization: `Bearer ${accessToken}`,
+
+        // Supabase project publishable key
+        apikey: publishableKey,
+      },
+
+      body: JSON.stringify(body),
+    }
+  );
+
+  let result: T;
+
+  try {
+    result = (await response.json()) as T;
+  } catch {
+    throw new Error(
+      `${functionName} returned an invalid response.`
+    );
+  }
+
+  return {
+    response,
+    result,
   };
 }
 
@@ -195,26 +241,18 @@ function getSupabaseConfig() {
 ============================================================ */
 
 function timeAgoShort(iso: string): string {
-  const timestamp = new Date(iso).getTime();
+  const diff =
+    Date.now() - new Date(iso).getTime();
 
-  if (Number.isNaN(timestamp)) {
-    return '—';
-  }
-
-  const diff = Date.now() - timestamp;
   const mins = Math.floor(diff / 60000);
 
   if (mins < 1) return 'just now';
 
-  if (mins < 60) {
-    return `${mins}m ago`;
-  }
+  if (mins < 60) return `${mins}m ago`;
 
   const hrs = Math.floor(mins / 60);
 
-  if (hrs < 24) {
-    return `${hrs}h ago`;
-  }
+  if (hrs < 24) return `${hrs}h ago`;
 
   return `${Math.floor(hrs / 24)}d ago`;
 }
@@ -244,9 +282,16 @@ function mapAgent(
 
   return {
     id: String(row.id),
+
     name: String(row.agent_name ?? ''),
-    organization: String(row.provider_name ?? ''),
-    provider: String(row.agent_identifier ?? ''),
+
+    organization: String(
+      row.provider_name ?? ''
+    ),
+
+    provider: String(
+      row.agent_identifier ?? ''
+    ),
 
     trustLevel:
       row.trust_level as AgentIdentity['trustLevel'],
@@ -261,7 +306,9 @@ function mapAgent(
       row.status as AgentIdentity['status'],
 
     lastActivity: row.last_activity_at
-      ? timeAgoShort(String(row.last_activity_at))
+      ? timeAgoShort(
+          String(row.last_activity_at)
+        )
       : '—',
 
     avatarColor:
@@ -282,8 +329,14 @@ function mapProduct(
     id: String(row.id),
 
     name: String(row.name ?? ''),
-    category: String(row.category ?? ''),
-    price: Number(row.price ?? 0),
+
+    category: String(
+      row.category ?? ''
+    ),
+
+    price: Number(
+      row.price ?? 0
+    ),
 
     inventory: Number(
       row.inventory_quantity ?? 0
@@ -329,17 +382,20 @@ function mapOpenTab(
   return {
     id: String(row.id),
 
-    agentId: String(row.agent_id ?? ''),
+    agentId: String(
+      row.agent_id ?? ''
+    ),
 
     agentName,
 
     trustLevel:
       trustLevel as OpenTab['trustLevel'],
 
-    scope:
-      Array.isArray(row.allowed_categories)
-        ? (row.allowed_categories as string[])
-        : [],
+    scope: Array.isArray(
+      row.allowed_categories
+    )
+      ? (row.allowed_categories as string[])
+      : [],
 
     cap: Number(
       row.authorization_cap ?? 0
@@ -420,15 +476,18 @@ function mapTransaction(
     trustLevel:
       trustLevel as Transaction['trustLevel'],
 
-    products:
-      Array.isArray(row.products)
-        ? (row.products as {
-            name: string;
-            price: number;
-          }[])
-        : [],
+    products: Array.isArray(
+      row.products
+    )
+      ? (row.products as {
+          name: string;
+          price: number;
+        }[])
+      : [],
 
-    amount: Number(row.amount ?? 0),
+    amount: Number(
+      row.amount ?? 0
+    ),
 
     openTabId: row.open_tab_id
       ? String(row.open_tab_id)
@@ -473,7 +532,9 @@ function mapLedger(
         })
       : '—',
 
-    what: eventTypeToLabel(eventType),
+    what: eventTypeToLabel(
+      eventType
+    ),
 
     why: String(
       row.reason ?? ''
@@ -539,10 +600,11 @@ function mapOpportunity(
       row.risk_level ?? 'medium'
     ) as GrowthOpportunity['risk'],
 
-    products:
-      Array.isArray(supportingData.products)
-        ? (supportingData.products as string[])
-        : [],
+    products: Array.isArray(
+      supportingData.products
+    )
+      ? (supportingData.products as string[])
+      : [],
 
     status: String(
       row.status ?? 'new'
@@ -558,7 +620,8 @@ function mapPolicy(
   row: Record<string, unknown>
 ): Policy {
   const rules =
-    (row.rules as Record<string, unknown>) ?? {};
+    (row.rules as Record<string, unknown>) ??
+    {};
 
   let value = '';
 
@@ -577,7 +640,9 @@ function mapPolicy(
       rules.max_txn_amount
     ).toLocaleString('en-IN')}`;
   } else if (
-    Array.isArray(rules.allowed_categories)
+    Array.isArray(
+      rules.allowed_categories
+    )
   ) {
     value = (
       rules.allowed_categories as string[]
@@ -587,7 +652,9 @@ function mapPolicy(
   ) {
     value = `${rules.max_requests_per_min} / min`;
   } else if (
-    Array.isArray(rules.allowed_trust_levels)
+    Array.isArray(
+      rules.allowed_trust_levels
+    )
   ) {
     value = (
       rules.allowed_trust_levels as string[]
@@ -609,10 +676,9 @@ function mapPolicy(
   return {
     id: String(row.id),
 
-    category:
-      String(
-        row.policy_type ?? ''
-      ) as Policy['category'],
+    category: String(
+      row.policy_type ?? ''
+    ) as Policy['category'],
 
     name: String(
       row.name ?? ''
@@ -682,7 +748,8 @@ function eventTypeToLabel(
   };
 
   return (
-    labels[eventType] ?? eventType
+    labels[eventType] ??
+    eventType
   );
 }
 
@@ -759,7 +826,8 @@ export function AppProvider({
       window.setTimeout(() => {
         setToasts((previous) =>
           previous.filter(
-            (item) => item.id !== id
+            (item) =>
+              item.id !== id
           )
         );
       }, toast.duration ?? 4000);
@@ -771,7 +839,8 @@ export function AppProvider({
     (id: string) => {
       setToasts((previous) =>
         previous.filter(
-          (item) => item.id !== id
+          (item) =>
+            item.id !== id
         )
       );
     },
@@ -783,55 +852,61 @@ export function AppProvider({
   ============================================================ */
 
   const getCurrentOrganizationId =
-    useCallback(async (): Promise<
-      string | null
-    > => {
-      if (organizationIdRef.current) {
+    useCallback(
+      async (): Promise<string | null> => {
+        if (
+          organizationIdRef.current
+        ) {
+          return organizationIdRef.current;
+        }
+
+        const {
+          data: { user },
+          error: userError,
+        } =
+          await supabase.auth.getUser();
+
+        if (userError || !user) {
+          return null;
+        }
+
+        const {
+          data: membership,
+          error,
+        } = await supabase
+          .from('organization_members')
+          .select('organization_id')
+          .eq('user_id', user.id)
+          .order('created_at', {
+            ascending: true,
+          })
+          .limit(1)
+          .maybeSingle();
+
+        if (error) {
+          console.error(
+            'Organization lookup failed:',
+            error
+          );
+
+          return null;
+        }
+
+        if (
+          !membership?.organization_id
+        ) {
+          return null;
+        }
+
+        organizationIdRef.current =
+          String(
+            membership.organization_id
+          );
+
         return organizationIdRef.current;
-      }
-
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        return null;
-      }
-
-      const {
-        data: membership,
-        error,
-      } = await supabase
-        .from('organization_members')
-        .select('organization_id')
-        .eq('user_id', user.id)
-        .order('created_at', {
-          ascending: true,
-        })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) {
-        console.error(
-          'Organization lookup failed:',
-          error
-        );
-
-        return null;
-      }
-
-      if (!membership?.organization_id) {
-        return null;
-      }
-
-      organizationIdRef.current =
-        String(
-          membership.organization_id
-        );
-
-      return organizationIdRef.current;
-    }, []);
+      },
+      []
+    );
 
   /* ============================================================
      CLEAR DATA
@@ -840,7 +915,10 @@ export function AppProvider({
   const clearData = useCallback(() => {
     organizationIdRef.current = null;
 
-    setMerchant(fallbackMerchant);
+    setMerchant(
+      fallbackMerchant
+    );
+
     setAgents([]);
     setProducts([]);
     setOpenTabs([]);
@@ -916,7 +994,9 @@ export function AppProvider({
             }),
 
           supabase
-            .from('trust_ledger_events')
+            .from(
+              'trust_ledger_events'
+            )
             .select('*')
             .eq(
               'organization_id',
@@ -928,7 +1008,9 @@ export function AppProvider({
             .limit(50),
 
           supabase
-            .from('revenue_opportunities')
+            .from(
+              'revenue_opportunities'
+            )
             .select('*')
             .eq(
               'organization_id',
@@ -1003,8 +1085,6 @@ export function AppProvider({
             orgRes.error
           );
 
-        /* AGENTS */
-
         const agentRows =
           (agentsRes.data ?? []) as Record<
             string,
@@ -1016,8 +1096,6 @@ export function AppProvider({
 
         setAgents(mappedAgents);
 
-        /* PRODUCTS */
-
         const productRows =
           (productsRes.data ?? []) as Record<
             string,
@@ -1025,19 +1103,19 @@ export function AppProvider({
           >[];
 
         setProducts(
-          productRows.map(mapProduct)
+          productRows.map(
+            mapProduct
+          )
         );
-
-        /* AGENT MAP */
 
         const agentMap = new Map(
-          mappedAgents.map((agent) => [
-            agent.id,
-            agent,
-          ])
+          mappedAgents.map(
+            (agent) => [
+              agent.id,
+              agent,
+            ]
+          )
         );
-
-        /* OPEN TABS */
 
         const tabRows =
           (tabsRes.data ?? []) as Record<
@@ -1056,13 +1134,13 @@ export function AppProvider({
 
             return mapOpenTab(
               row,
-              agent?.name ?? 'Unknown',
-              agent?.trustLevel ?? 'unknown'
+              agent?.name ??
+                'Unknown',
+              agent?.trustLevel ??
+                'unknown'
             );
           })
         );
-
-        /* TRANSACTIONS */
 
         const txnRows =
           (txnsRes.data ?? []) as Record<
@@ -1081,13 +1159,13 @@ export function AppProvider({
 
             return mapTransaction(
               row,
-              agent?.name ?? 'Unknown',
-              agent?.trustLevel ?? 'unknown'
+              agent?.name ??
+                'Unknown',
+              agent?.trustLevel ??
+                'unknown'
             );
           })
         );
-
-        /* LEDGER */
 
         const ledgerRows =
           (ledgerRes.data ?? []) as Record<
@@ -1096,10 +1174,10 @@ export function AppProvider({
           >[];
 
         setLedger(
-          ledgerRows.map(mapLedger)
+          ledgerRows.map(
+            mapLedger
+          )
         );
-
-        /* OPPORTUNITIES */
 
         const opportunityRows =
           (oppsRes.data ?? []) as Record<
@@ -1113,8 +1191,6 @@ export function AppProvider({
           )
         );
 
-        /* POLICIES */
-
         const policyRows =
           (policiesRes.data ?? []) as Record<
             string,
@@ -1122,10 +1198,10 @@ export function AppProvider({
           >[];
 
         setPolicies(
-          policyRows.map(mapPolicy)
+          policyRows.map(
+            mapPolicy
+          )
         );
-
-        /* ORGANIZATION */
 
         if (orgRes.data) {
           const org =
@@ -1134,35 +1210,37 @@ export function AppProvider({
               unknown
             >;
 
-          setMerchant((previous) => ({
-            ...previous,
+          setMerchant(
+            (previous) => ({
+              ...previous,
 
-            businessName: String(
-              org.name ??
-                previous.businessName ??
-                ''
-            ),
+              businessName: String(
+                org.name ??
+                  previous.businessName ??
+                  ''
+              ),
 
-            industry: String(
-              org.industry ??
-                previous.industry ??
-                ''
-            ),
+              industry: String(
+                org.industry ??
+                  previous.industry ??
+                  ''
+              ),
 
-            storeUrl: String(
-              org.store_url ??
-                previous.storeUrl ??
-                ''
-            ),
+              storeUrl: String(
+                org.store_url ??
+                  previous.storeUrl ??
+                  ''
+              ),
 
-            contactEmail: String(
-              org.contact_email ??
-                previous.contactEmail ??
-                ''
-            ),
+              contactEmail: String(
+                org.contact_email ??
+                  previous.contactEmail ??
+                  ''
+              ),
 
-            onboardingComplete: true,
-          }));
+              onboardingComplete: true,
+            })
+          );
         }
       } catch (error) {
         console.error(
@@ -1182,36 +1260,38 @@ export function AppProvider({
   useEffect(() => {
     let mounted = true;
 
-    const initialize = async () => {
-      try {
-        const {
-          data: { session },
-        } =
-          await supabase.auth.getSession();
+    const initialize =
+      async () => {
+        try {
+          const {
+            data: { session },
+          } =
+            await supabase.auth.getSession();
 
-        if (!mounted) return;
+          if (!mounted) return;
 
-        if (session) {
-          setAuthed(true);
+          if (session) {
+            setAuthed(true);
 
-          organizationIdRef.current = null;
+            organizationIdRef.current =
+              null;
 
-          await refreshData();
-        } else {
-          setAuthed(false);
-          clearData();
+            await refreshData();
+          } else {
+            setAuthed(false);
+            clearData();
+          }
+        } catch (error) {
+          console.error(
+            'Auth initialization error:',
+            error
+          );
+        } finally {
+          if (mounted) {
+            setLoading(false);
+          }
         }
-      } catch (error) {
-        console.error(
-          'Auth initialization error:',
-          error
-        );
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    };
+      };
 
     void initialize();
 
@@ -1223,8 +1303,6 @@ export function AppProvider({
           _event: AuthChangeEvent,
           session: Session | null
         ) => {
-          if (!mounted) return;
-
           if (!session) {
             setAuthed(false);
             clearData();
@@ -1233,12 +1311,11 @@ export function AppProvider({
 
           setAuthed(true);
 
-          organizationIdRef.current = null;
+          organizationIdRef.current =
+            null;
 
           window.setTimeout(() => {
-            if (mounted) {
-              void refreshData();
-            }
+            void refreshData();
           }, 0);
         }
       );
@@ -1248,16 +1325,17 @@ export function AppProvider({
 
       listener.subscription.unsubscribe();
     };
-  }, [refreshData, clearData]);
+  }, [
+    refreshData,
+    clearData,
+  ]);
 
   /* ============================================================
      REALTIME
   ============================================================ */
 
   useEffect(() => {
-    if (!authed) {
-      return;
-    }
+    if (!authed) return;
 
     const channel = supabase
       .channel(
@@ -1268,7 +1346,8 @@ export function AppProvider({
         {
           event: '*',
           schema: 'public',
-          table: 'transaction_requests',
+          table:
+            'transaction_requests',
         },
         () => {
           void refreshData();
@@ -1301,7 +1380,8 @@ export function AppProvider({
         {
           event: '*',
           schema: 'public',
-          table: 'trust_ledger_events',
+          table:
+            'trust_ledger_events',
         },
         () => {
           void refreshData();
@@ -1320,101 +1400,122 @@ export function AppProvider({
 
       realtimeChannels.current =
         realtimeChannels.current.filter(
-          (item) => item !== channel
+          (item) =>
+            item !== channel
         );
     };
-  }, [authed, refreshData]);
+  }, [
+    authed,
+    refreshData,
+  ]);
 
   /* ============================================================
      MERCHANT
   ============================================================ */
 
-  const updateMerchant = useCallback(
-    (
-      patch: Partial<MerchantProfile>
-    ) => {
-      setMerchant((previous) => ({
-        ...previous,
-        ...patch,
-      }));
-    },
-    []
-  );
+  const updateMerchant =
+    useCallback(
+      (
+        patch: Partial<MerchantProfile>
+      ) => {
+        setMerchant(
+          (previous) => ({
+            ...previous,
+            ...patch,
+          })
+        );
+      },
+      []
+    );
 
   /* ============================================================
      POLICY
   ============================================================ */
 
-  const updatePolicy = useCallback(
-    (
-      id: string,
-      patch: Partial<Policy>
-    ) => {
-      setPolicies((previous) =>
-        previous.map((policy) =>
-          policy.id === id
-            ? {
-                ...policy,
-                ...patch,
-              }
-            : policy
-        )
-      );
-    },
-    []
-  );
+  const updatePolicy =
+    useCallback(
+      (
+        id: string,
+        patch: Partial<Policy>
+      ) => {
+        setPolicies(
+          (previous) =>
+            previous.map(
+              (policy) =>
+                policy.id === id
+                  ? {
+                      ...policy,
+                      ...patch,
+                    }
+                  : policy
+            )
+        );
+      },
+      []
+    );
 
-  const togglePolicy = useCallback(
-    async (id: string) => {
-      const policy = policies.find(
-        (item) => item.id === id
-      );
+  const togglePolicy =
+    useCallback(
+      async (id: string) => {
+        const policy =
+          policies.find(
+            (item) =>
+              item.id === id
+          );
 
-      if (!policy) return;
+        if (!policy) return;
 
-      const enabled =
-        !policy.enabled;
+        const enabled =
+          !policy.enabled;
 
-      setPolicies((previous) =>
-        previous.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                enabled,
-              }
-            : item
-        )
-      );
-
-      const { error } =
-        await supabase
-          .from('policies')
-          .update({ enabled })
-          .eq('id', id);
-
-      if (error) {
-        setPolicies((previous) =>
-          previous.map((item) =>
-            item.id === id
-              ? {
-                  ...item,
-                  enabled:
-                    policy.enabled,
-                }
-              : item
-          )
+        setPolicies(
+          (previous) =>
+            previous.map(
+              (item) =>
+                item.id === id
+                  ? {
+                      ...item,
+                      enabled,
+                    }
+                  : item
+            )
         );
 
-        pushToast({
-          type: 'error',
-          title:
-            'Policy update failed',
-          message: error.message,
-        });
-      }
-    },
-    [policies, pushToast]
-  );
+        const { error } =
+          await supabase
+            .from('policies')
+            .update({ enabled })
+            .eq('id', id);
+
+        if (error) {
+          setPolicies(
+            (previous) =>
+              previous.map(
+                (item) =>
+                  item.id === id
+                    ? {
+                        ...item,
+                        enabled:
+                          policy.enabled,
+                      }
+                    : item
+              )
+          );
+
+          pushToast({
+            type: 'error',
+            title:
+              'Policy update failed',
+            message:
+              error.message,
+          });
+        }
+      },
+      [
+        policies,
+        pushToast,
+      ]
+    );
 
   /* ============================================================
      OPPORTUNITY
@@ -1426,20 +1527,24 @@ export function AppProvider({
         id: string,
         status: GrowthOpportunity['status']
       ) => {
-        setOpportunities((previous) =>
-          previous.map((item) =>
-            item.id === id
-              ? {
-                  ...item,
-                  status,
-                }
-              : item
-          )
+        setOpportunities(
+          (previous) =>
+            previous.map(
+              (item) =>
+                item.id === id
+                  ? {
+                      ...item,
+                      status,
+                    }
+                  : item
+            )
         );
 
         const { error } =
           await supabase
-            .from('revenue_opportunities')
+            .from(
+              'revenue_opportunities'
+            )
             .update({ status })
             .eq('id', id);
 
@@ -1459,342 +1564,357 @@ export function AppProvider({
      AGENT STATUS
   ============================================================ */
 
-  const setAgentStatus = useCallback(
-    async (
-      id: string,
-      status: AgentIdentity['status']
-    ) => {
-      const previousAgent =
-        agents.find(
-          (agent) => agent.id === id
-        );
-
-      setAgents((previous) =>
-        previous.map((agent) =>
-          agent.id === id
-            ? {
-                ...agent,
-                status,
-              }
-            : agent
-        )
-      );
-
-      const { error } =
-        await supabase
-          .from('agents')
-          .update({ status })
-          .eq('id', id);
-
-      if (error) {
-        console.error(
-          'Agent status update error:',
-          error
-        );
-
-        if (previousAgent) {
-          setAgents((previous) =>
-            previous.map((agent) =>
+  const setAgentStatus =
+    useCallback(
+      async (
+        id: string,
+        status: AgentIdentity['status']
+      ) => {
+        const previousAgent =
+          agents.find(
+            (agent) =>
               agent.id === id
-                ? previousAgent
-                : agent
-            )
           );
+
+        setAgents(
+          (previous) =>
+            previous.map(
+              (agent) =>
+                agent.id === id
+                  ? {
+                      ...agent,
+                      status,
+                    }
+                  : agent
+            )
+        );
+
+        const { error } =
+          await supabase
+            .from('agents')
+            .update({ status })
+            .eq('id', id);
+
+        if (error) {
+          console.error(
+            'Agent status update error:',
+            error
+          );
+
+          if (previousAgent) {
+            setAgents(
+              (previous) =>
+                previous.map(
+                  (agent) =>
+                    agent.id === id
+                      ? previousAgent
+                      : agent
+                )
+            );
+          }
         }
-      }
-    },
-    [agents]
-  );
+      },
+      [agents]
+    );
 
   /* ============================================================
      LEDGER
   ============================================================ */
 
-  const addLedgerEvent = useCallback(
-    (
-      event: Omit<LedgerEvent, 'id'>
-    ) => {
-      setLedger((previous) => [
-        {
-          ...event,
-          id: uid('e'),
-        },
-        ...previous,
-      ]);
-    },
-    []
-  );
+  const addLedgerEvent =
+    useCallback(
+      (
+        event: Omit<
+          LedgerEvent,
+          'id'
+        >
+      ) => {
+        setLedger(
+          (previous) => [
+            {
+              ...event,
+              id: uid('e'),
+            },
+            ...previous,
+          ]
+        );
+      },
+      []
+    );
 
   /* ============================================================
      CREATE OPEN TAB
   ============================================================ */
 
-  const createOpenTab = useCallback(
-    async (
-      tab: Omit<
-        OpenTab,
-        'id' | 'createdAt' | 'remaining' | 'status'
-      >
-    ): Promise<OpenTab> => {
-      const organizationId =
-        await getCurrentOrganizationId();
+  const createOpenTab =
+    useCallback(
+      async (
+        tab: Omit<
+          OpenTab,
+          | 'id'
+          | 'createdAt'
+          | 'remaining'
+          | 'status'
+        >
+      ): Promise<OpenTab> => {
+        const organizationId =
+          await getCurrentOrganizationId();
 
-      if (!organizationId) {
-        throw new Error(
-          'No organization found for the current user.'
-        );
-      }
-
-      const {
-        data: { session },
-      } =
-        await supabase.auth.getSession();
-
-      if (!session) {
-        throw new Error(
-          'You must be signed in.'
-        );
-      }
-
-      const { url, key } =
-        getSupabaseConfig();
-
-      const response = await fetch(
-        `${url}/functions/v1/create-open-tab`,
-        {
-          method: 'POST',
-
-          headers: {
-            'Content-Type':
-              'application/json',
-
-            Authorization: `Bearer ${session.access_token}`,
-
-            apikey: key,
-          },
-
-          body: JSON.stringify({
-            organization_id:
-              organizationId,
-
-            agent_id:
-              tab.agentId,
-
-            name: tab.agentName
-              ? `${tab.agentName} Tab`
-              : 'OpenTab',
-
-            authorization_cap:
-              tab.cap,
-
-            auto_approval_ceiling:
-              tab.autoApproveCeiling,
-
-            allowed_categories:
-              tab.scope,
-          }),
+        if (!organizationId) {
+          throw new Error(
+            'No organization found for the current user.'
+          );
         }
-      );
 
-      let result: {
-        success?: boolean;
+        const {
+          data: { session },
+        } =
+          await supabase.auth.getSession();
 
-        data?: {
-          open_tab?: {
-            id?: string;
+        if (!session) {
+          throw new Error(
+            'You must be signed in.'
+          );
+        }
+
+        type CreateOpenTabResult = {
+          success?: boolean;
+
+          data?: {
+            open_tab?: {
+              id?: string;
+            };
+          };
+
+          error?: {
+            message?: string;
           };
         };
 
-        error?: {
-          message?: string;
+        const {
+          response,
+          result,
+        } =
+          await callEdgeFunction<CreateOpenTabResult>(
+            'create-open-tab',
+            session.access_token,
+            {
+              organization_id:
+                organizationId,
+
+              agent_id:
+                tab.agentId,
+
+              name: tab.agentName
+                ? `${tab.agentName} Tab`
+                : 'OpenTab',
+
+              authorization_cap:
+                tab.cap,
+
+              auto_approval_ceiling:
+                tab.autoApproveCeiling,
+
+              allowed_categories:
+                tab.scope,
+            }
+          );
+
+        if (
+          !response.ok ||
+          !result.success ||
+          !result.data?.open_tab?.id
+        ) {
+          throw new Error(
+            result.error?.message ??
+              `Failed to create OpenTab (${response.status}).`
+          );
+        }
+
+        const newTab: OpenTab = {
+          ...tab,
+
+          id: String(
+            result.data.open_tab.id
+          ),
+
+          remaining: tab.cap,
+
+          status: 'active',
+
+          createdAt: 'Just now',
         };
-      };
 
-      try {
-        result =
-          await response.json();
-      } catch {
-        throw new Error(
-          'Invalid response from create-open-tab.'
+        setOpenTabs(
+          (previous) => [
+            newTab,
+            ...previous,
+          ]
         );
-      }
 
-      if (
-        !response.ok ||
-        !result.success ||
-        !result.data?.open_tab?.id
-      ) {
-        throw new Error(
-          result.error?.message ??
-            'Failed to create OpenTab.'
-        );
-      }
+        addLedgerEvent({
+          time: 'Just now',
 
-      const newTab: OpenTab = {
-        ...tab,
+          what:
+            'OpenTab activated',
 
-        id: String(
-          result.data.open_tab.id
-        ),
+          why: `New OpenTab created for ${tab.agentName}`,
 
-        remaining: tab.cap,
+          who: tab.agentName,
 
-        status: 'active',
+          whoType: 'merchant',
 
-        createdAt: 'Just now',
-      };
+          policy:
+            'opentab-scope',
+        });
 
-      setOpenTabs((previous) => [
-        newTab,
-        ...previous,
-      ]);
-
-      addLedgerEvent({
-        time: 'Just now',
-
-        what: 'OpenTab activated',
-
-        why: `New OpenTab created for ${tab.agentName}`,
-
-        who: tab.agentName,
-
-        whoType: 'merchant',
-
-        policy: 'opentab-scope',
-      });
-
-      return newTab;
-    },
-    [
-      getCurrentOrganizationId,
-      addLedgerEvent,
-    ]
-  );
+        return newTab;
+      },
+      [
+        getCurrentOrganizationId,
+        addLedgerEvent,
+      ]
+    );
 
   /* ============================================================
      PAUSE OPEN TAB
   ============================================================ */
 
-  const pauseOpenTab = useCallback(
-    async (id: string) => {
-      const { error } =
-        await supabase
-          .from('open_tabs')
-          .update({
-            status: 'paused',
+  const pauseOpenTab =
+    useCallback(
+      async (id: string) => {
+        const { error } =
+          await supabase
+            .from('open_tabs')
+            .update({
+              status: 'paused',
 
-            paused_at:
-              new Date().toISOString(),
-          })
-          .eq('id', id);
+              paused_at:
+                new Date().toISOString(),
+            })
+            .eq('id', id);
 
-      if (error) {
+        if (error) {
+          pushToast({
+            type: 'error',
+
+            title:
+              'Unable to pause OpenTab',
+
+            message:
+              error.message,
+          });
+
+          return;
+        }
+
+        setOpenTabs(
+          (previous) =>
+            previous.map(
+              (tab) =>
+                tab.id === id
+                  ? {
+                      ...tab,
+                      status:
+                        'paused',
+                    }
+                  : tab
+            )
+        );
+
         pushToast({
-          type: 'error',
+          type: 'info',
 
           title:
-            'Unable to pause OpenTab',
+            'OpenTab paused',
 
-          message: error.message,
+          message:
+            'The agent can no longer request transactions.',
         });
-
-        return;
-      }
-
-      setOpenTabs((previous) =>
-        previous.map((tab) =>
-          tab.id === id
-            ? {
-                ...tab,
-                status: 'paused',
-              }
-            : tab
-        )
-      );
-
-      pushToast({
-        type: 'info',
-
-        title: 'OpenTab paused',
-
-        message:
-          'The agent can no longer request transactions.',
-      });
-    },
-    [pushToast]
-  );
+      },
+      [pushToast]
+    );
 
   /* ============================================================
      REVOKE OPEN TAB
   ============================================================ */
 
-  const revokeOpenTab = useCallback(
-    async (id: string) => {
-      const { error } =
-        await supabase
-          .from('open_tabs')
-          .update({
-            status: 'revoked',
+  const revokeOpenTab =
+    useCallback(
+      async (id: string) => {
+        const { error } =
+          await supabase
+            .from('open_tabs')
+            .update({
+              status: 'revoked',
 
-            remaining_amount: 0,
+              remaining_amount: 0,
 
-            revoked_at:
-              new Date().toISOString(),
-          })
-          .eq('id', id);
+              revoked_at:
+                new Date().toISOString(),
+            })
+            .eq('id', id);
 
-      if (error) {
+        if (error) {
+          pushToast({
+            type: 'error',
+
+            title:
+              'Unable to revoke OpenTab',
+
+            message:
+              error.message,
+          });
+
+          return;
+        }
+
+        setOpenTabs(
+          (previous) =>
+            previous.map(
+              (tab) =>
+                tab.id === id
+                  ? {
+                      ...tab,
+
+                      status:
+                        'revoked',
+
+                      remaining: 0,
+                    }
+                  : tab
+            )
+        );
+
         pushToast({
-          type: 'error',
+          type: 'warning',
 
           title:
-            'Unable to revoke OpenTab',
+            'OpenTab revoked',
 
-          message: error.message,
+          message:
+            'All transaction authority has been removed.',
         });
-
-        return;
-      }
-
-      setOpenTabs((previous) =>
-        previous.map((tab) =>
-          tab.id === id
-            ? {
-                ...tab,
-
-                status: 'revoked',
-
-                remaining: 0,
-              }
-            : tab
-        )
-      );
-
-      pushToast({
-        type: 'warning',
-
-        title: 'OpenTab revoked',
-
-        message:
-          'All transaction authority has been removed.',
-      });
-    },
-    [pushToast]
-  );
+      },
+      [pushToast]
+    );
 
   /* ============================================================
      TRANSACTIONS
   ============================================================ */
 
-  const addTransaction = useCallback(
-    (txn: Transaction) => {
-      setTransactions((previous) => [
-        txn,
-        ...previous,
-      ]);
-    },
-    []
-  );
+  const addTransaction =
+    useCallback(
+      (txn: Transaction) => {
+        setTransactions(
+          (previous) => [
+            txn,
+            ...previous,
+          ]
+        );
+      },
+      []
+    );
 
   /* ============================================================
      APPROVE TRANSACTION
@@ -1812,7 +1932,8 @@ export function AppProvider({
           pushToast({
             type: 'error',
 
-            title: 'Not authenticated',
+            title:
+              'Not authenticated',
 
             message:
               'Please sign in again.',
@@ -1838,33 +1959,7 @@ export function AppProvider({
           return;
         }
 
-        const { url, key } =
-          getSupabaseConfig();
-
-        const response = await fetch(
-          `${url}/functions/v1/approve-transaction`,
-          {
-            method: 'POST',
-
-            headers: {
-              'Content-Type':
-                'application/json',
-
-              Authorization: `Bearer ${session.access_token}`,
-
-              apikey: key,
-            },
-
-            body: JSON.stringify({
-              transaction_id: id,
-
-              organization_id:
-                organizationId,
-            }),
-          }
-        );
-
-        let result: {
+        type ApprovalResult = {
           success?: boolean;
 
           error?: {
@@ -1873,16 +1968,52 @@ export function AppProvider({
         };
 
         try {
-          result =
-            await response.json();
-        } catch {
-          result = {};
-        }
+          const {
+            response,
+            result,
+          } =
+            await callEdgeFunction<ApprovalResult>(
+              'approve-transaction',
+              session.access_token,
+              {
+                transaction_id:
+                  id,
 
-        if (
-          !response.ok ||
-          !result.success
-        ) {
+                organization_id:
+                  organizationId,
+              }
+            );
+
+          if (
+            !response.ok ||
+            !result.success
+          ) {
+            pushToast({
+              type: 'error',
+
+              title:
+                'Approval failed',
+
+              message:
+                result.error?.message ??
+                `Failed to approve transaction (${response.status}).`,
+            });
+
+            return;
+          }
+
+          pushToast({
+            type: 'success',
+
+            title:
+              'Transaction approved',
+
+            message:
+              'Payment has been confirmed.',
+          });
+
+          await refreshData();
+        } catch (error) {
           pushToast({
             type: 'error',
 
@@ -1890,24 +2021,11 @@ export function AppProvider({
               'Approval failed',
 
             message:
-              result.error?.message ??
-              'Failed to approve transaction.',
+              error instanceof Error
+                ? error.message
+                : 'Unexpected approval error.',
           });
-
-          return;
         }
-
-        pushToast({
-          type: 'success',
-
-          title:
-            'Transaction approved',
-
-          message:
-            'Payment has been confirmed.',
-        });
-
-        await refreshData();
       },
       [
         getCurrentOrganizationId,
@@ -1932,7 +2050,8 @@ export function AppProvider({
           pushToast({
             type: 'error',
 
-            title: 'Not authenticated',
+            title:
+              'Not authenticated',
 
             message:
               'Please sign in again.',
@@ -1958,33 +2077,7 @@ export function AppProvider({
           return;
         }
 
-        const { url, key } =
-          getSupabaseConfig();
-
-        const response = await fetch(
-          `${url}/functions/v1/decline-transaction`,
-          {
-            method: 'POST',
-
-            headers: {
-              'Content-Type':
-                'application/json',
-
-              Authorization: `Bearer ${session.access_token}`,
-
-              apikey: key,
-            },
-
-            body: JSON.stringify({
-              transaction_id: id,
-
-              organization_id:
-                organizationId,
-            }),
-          }
-        );
-
-        let result: {
+        type DeclineResult = {
           success?: boolean;
 
           error?: {
@@ -1993,16 +2086,52 @@ export function AppProvider({
         };
 
         try {
-          result =
-            await response.json();
-        } catch {
-          result = {};
-        }
+          const {
+            response,
+            result,
+          } =
+            await callEdgeFunction<DeclineResult>(
+              'decline-transaction',
+              session.access_token,
+              {
+                transaction_id:
+                  id,
 
-        if (
-          !response.ok ||
-          !result.success
-        ) {
+                organization_id:
+                  organizationId,
+              }
+            );
+
+          if (
+            !response.ok ||
+            !result.success
+          ) {
+            pushToast({
+              type: 'error',
+
+              title:
+                'Decline failed',
+
+              message:
+                result.error?.message ??
+                `Failed to decline transaction (${response.status}).`,
+            });
+
+            return;
+          }
+
+          pushToast({
+            type: 'warning',
+
+            title:
+              'Transaction declined',
+
+            message:
+              'The request has been denied.',
+          });
+
+          await refreshData();
+        } catch (error) {
           pushToast({
             type: 'error',
 
@@ -2010,24 +2139,11 @@ export function AppProvider({
               'Decline failed',
 
             message:
-              result.error?.message ??
-              'Failed to decline transaction.',
+              error instanceof Error
+                ? error.message
+                : 'Unexpected decline error.',
           });
-
-          return;
         }
-
-        pushToast({
-          type: 'warning',
-
-          title:
-            'Transaction declined',
-
-          message:
-            'The request has been denied.',
-        });
-
-        await refreshData();
       },
       [
         getCurrentOrganizationId,
@@ -2071,12 +2187,17 @@ export function AppProvider({
           {
             id: 's1',
 
-            label: 'Agent Request',
+            label:
+              'Agent Request',
 
-            status: 'pending',
+            status:
+              'pending',
 
             detail: `Agent requested purchase of ${params.products
-              .map((p) => p.name)
+              .map(
+                (p) =>
+                  p.name
+              )
               .join(', ')}`,
           },
 
@@ -2086,7 +2207,8 @@ export function AppProvider({
             label:
               'Identity Verification',
 
-            status: 'pending',
+            status:
+              'pending',
           },
 
           {
@@ -2095,15 +2217,18 @@ export function AppProvider({
             label:
               'Catalog Validation',
 
-            status: 'pending',
+            status:
+              'pending',
           },
 
           {
             id: 's4',
 
-            label: 'Policy Check',
+            label:
+              'Policy Check',
 
-            status: 'pending',
+            status:
+              'pending',
           },
 
           {
@@ -2112,7 +2237,8 @@ export function AppProvider({
             label:
               'OpenTab Validation',
 
-            status: 'pending',
+            status:
+              'pending',
           },
 
           {
@@ -2121,7 +2247,8 @@ export function AppProvider({
             label:
               'Payment Initiated',
 
-            status: 'pending',
+            status:
+              'pending',
           },
 
           {
@@ -2130,7 +2257,8 @@ export function AppProvider({
             label:
               'Payment Confirmed',
 
-            status: 'pending',
+            status:
+              'pending',
           },
         ];
 
@@ -2171,47 +2299,12 @@ export function AppProvider({
             };
           }
 
-          const { url, key } =
-            getSupabaseConfig();
-
           stages[0] = {
             ...stages[0],
 
-            status: 'passed',
+            status:
+              'passed',
           };
-
-          const response = await fetch(
-            `${url}/functions/v1/evaluate-transaction`,
-            {
-              method: 'POST',
-
-              headers: {
-                'Content-Type':
-                  'application/json',
-
-                Authorization: `Bearer ${session.access_token}`,
-
-                apikey: key,
-              },
-
-              body: JSON.stringify({
-                organization_id:
-                  organizationId,
-
-                agent_id:
-                  params.agentId,
-
-                products:
-                  params.products,
-
-                idempotency_key:
-                  idempotencyKey,
-
-                open_tab_id:
-                  params.openTabId ?? null,
-              }),
-            }
-          );
 
           type EvaluationResult = {
             success?: boolean;
@@ -2239,24 +2332,31 @@ export function AppProvider({
             };
           };
 
-          let result: EvaluationResult;
+          const {
+            response,
+            result,
+          } =
+            await callEdgeFunction<EvaluationResult>(
+              'evaluate-transaction',
+              session.access_token,
+              {
+                organization_id:
+                  organizationId,
 
-          try {
-            result =
-              await response.json();
-          } catch {
-            return {
-              decision:
-                'declined' as TxnDecision,
+                agent_id:
+                  params.agentId,
 
-              reason:
-                'Transaction service returned an invalid response.',
+                products:
+                  params.products,
 
-              stages,
+                idempotency_key:
+                  idempotencyKey,
 
-              amount,
-            };
-          }
+                open_tab_id:
+                  params.openTabId ??
+                  null,
+              }
+            );
 
           if (
             !response.ok &&
@@ -2311,7 +2411,8 @@ export function AppProvider({
             (check) => {
               const label =
                 String(
-                  check.label ?? ''
+                  check.label ??
+                    ''
                 ).toLowerCase();
 
               let index = -1;
@@ -2369,12 +2470,14 @@ export function AppProvider({
           );
 
           if (
-            decision === 'approved'
+            decision ===
+            'approved'
           ) {
             stages[5] = {
               ...stages[5],
 
-              status: 'passed',
+              status:
+                'passed',
 
               detail:
                 'Payment handed to provider.',
@@ -2383,7 +2486,8 @@ export function AppProvider({
             stages[6] = {
               ...stages[6],
 
-              status: 'passed',
+              status:
+                'passed',
 
               detail:
                 'Payment provider confirmed.',
@@ -2391,12 +2495,14 @@ export function AppProvider({
           }
 
           if (
-            decision === 'escalated'
+            decision ===
+            'escalated'
           ) {
             stages[5] = {
               ...stages[5],
 
-              status: 'skipped',
+              status:
+                'skipped',
 
               detail:
                 'Waiting for merchant approval.',
@@ -2405,7 +2511,8 @@ export function AppProvider({
             stages[6] = {
               ...stages[6],
 
-              status: 'skipped',
+              status:
+                'skipped',
 
               detail:
                 'Waiting for merchant approval.',
@@ -2413,18 +2520,21 @@ export function AppProvider({
           }
 
           if (
-            decision === 'declined'
+            decision ===
+            'declined'
           ) {
             stages[5] = {
               ...stages[5],
 
-              status: 'skipped',
+              status:
+                'skipped',
             };
 
             stages[6] = {
               ...stages[6],
 
-              status: 'skipped',
+              status:
+                'skipped',
             };
           }
 
@@ -2434,7 +2544,8 @@ export function AppProvider({
             decision,
 
             reason:
-              data.reason ?? '',
+              data.reason ??
+              '',
 
             stages,
 
@@ -2477,24 +2588,17 @@ export function AppProvider({
      SIGN OUT
   ============================================================ */
 
-  const signOut = useCallback(
-    async () => {
-      const { error } =
+  const signOut =
+    useCallback(
+      async () => {
         await supabase.auth.signOut();
 
-      if (error) {
-        console.error(
-          'Sign out error:',
-          error
-        );
-      }
+        clearData();
 
-      clearData();
-
-      setAuthed(false);
-    },
-    [clearData]
-  );
+        setAuthed(false);
+      },
+      [clearData]
+    );
 
   /* ============================================================
      CONTEXT VALUE
