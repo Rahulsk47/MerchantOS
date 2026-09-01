@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   CheckCircle2,
 } from 'lucide-react';
+
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -37,7 +38,10 @@ export default function SignUpPage() {
     const name = form.name.trim();
     const email = form.email.trim().toLowerCase();
 
-    // Validation
+    // -------------------------
+    // VALIDATION
+    // -------------------------
+
     if (!name) {
       errs.name = 'Name is required';
     }
@@ -72,22 +76,28 @@ export default function SignUpPage() {
 
     try {
       /*
-       * IMPORTANT:
+       * IMPORTANT
        *
-       * After the user verifies their email,
-       * Supabase redirects them back to /auth/callback.
+       * The verification email will open:
        *
-       * This works both locally and on Vercel.
+       * https://YOUR-VERCEL-DOMAIN/auth/callback
+       *
+       * AuthCallbackPage will exchange the Supabase
+       * verification code for a session.
        */
-      const redirectUrl = `${window.location.origin}/auth/callback`;
+
+      const redirectUrl =
+        `${window.location.origin}/auth/callback`;
 
       const { data, error } = await supabase.auth.signUp({
         email,
         password: form.password,
+
         options: {
           data: {
             full_name: name,
           },
+
           emailRedirectTo: redirectUrl,
         },
       });
@@ -100,28 +110,38 @@ export default function SignUpPage() {
       /*
        * EMAIL CONFIRMATION ENABLED
        *
-       * Supabase returns a user but no session.
-       * User must click the verification email.
+       * User exists but does not have a session yet.
        */
+
       if (data.user && !data.session) {
         setSuccessMessage(
           'Account created successfully. Check your email and click the verification link to continue.'
         );
+
         return;
       }
 
       /*
        * EMAIL CONFIRMATION DISABLED
        *
-       * User gets a session immediately.
+       * User already has a session.
        */
+
       if (data.user && data.session) {
-        navigate('/onboarding', { replace: true });
+        navigate('/onboarding', {
+          replace: true,
+        });
+
+        return;
       }
-    } catch (error) {
+
       setAuthError(
-        error instanceof Error
-          ? error.message
+        'Account creation completed, but authentication could not be established. Please try signing in.'
+      );
+    } catch (err) {
+      setAuthError(
+        err instanceof Error
+          ? err.message
           : 'Unable to create your account. Please try again.'
       );
     } finally {
@@ -132,6 +152,7 @@ export default function SignUpPage() {
   return (
     <div className="min-h-screen flex">
       {/* LEFT PANEL */}
+
       <div className="hidden lg:flex flex-1 relative bg-ink-900 items-center justify-center p-12 overflow-hidden">
         <div className="absolute inset-0 bg-grid-faint opacity-30" />
         <div className="absolute inset-0 bg-radial-fade" />
@@ -161,14 +182,14 @@ export default function SignUpPage() {
         </div>
       </div>
 
-      {/* SIGN UP PANEL */}
+      {/* SIGN UP */}
+
       <div className="flex-1 flex items-center justify-center p-6">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-sm"
         >
-          {/* MOBILE LOGO */}
           <div className="lg:hidden mb-8">
             <Logo />
           </div>
@@ -182,13 +203,15 @@ export default function SignUpPage() {
           </p>
 
           {/* ERROR */}
+
           {authError && (
             <div className="mt-4 p-3 rounded-xl bg-danger-500/10 border border-danger-500/30 text-danger-300 text-sm">
               {authError}
             </div>
           )}
 
-          {/* SUCCESS */}
+          {/* SUCCESS / EMAIL VERIFICATION */}
+
           {successMessage && (
             <div className="mt-4 p-4 rounded-xl bg-success-500/10 border border-success-500/30 text-success-300 text-sm">
               <div className="flex items-start gap-2">
@@ -202,13 +225,23 @@ export default function SignUpPage() {
                   <p className="mt-1 text-success-300/80">
                     {successMessage}
                   </p>
+
+                  <p className="mt-3 text-xs text-success-300/60">
+                    Open the verification email and click the
+                    verification button. You will then be taken to
+                    MerchantOS onboarding.
+                  </p>
                 </div>
               </div>
             </div>
           )}
 
           {/* FORM */}
-          <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+
+          <form
+            onSubmit={handleSubmit}
+            className="mt-8 space-y-4"
+          >
             <Input
               label="Full name"
               placeholder="Jane Merchant"
@@ -288,7 +321,6 @@ export default function SignUpPage() {
             </Button>
           </form>
 
-          {/* SIGN IN */}
           <p className="mt-6 text-center text-sm text-ink-400">
             Already have an account?{' '}
             <Link
@@ -299,7 +331,6 @@ export default function SignUpPage() {
             </Link>
           </p>
 
-          {/* HOME */}
           <div className="mt-6 flex items-center justify-center">
             <Link
               to="/"

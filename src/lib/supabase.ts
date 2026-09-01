@@ -6,7 +6,7 @@ const supabasePublishableKey =
 
 if (!supabaseUrl || !supabasePublishableKey) {
   throw new Error(
-    "Missing Supabase environment variables. Check your .env file."
+    "Missing Supabase environment variables. Check your .env file for VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY."
   );
 }
 
@@ -22,6 +22,7 @@ export const supabase = createClient(
   }
 );
 
-// MerchantOS demo organization
+// Demo organization.
+// Do not use this for logged-in merchant data.
 export const DEMO_ORG_ID =
   "a0000000-0000-0000-0000-000000000001";

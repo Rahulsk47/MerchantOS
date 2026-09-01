@@ -10,35 +10,72 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     let mounted = true;
 
-    const handleAuth = async () => {
+    const handleAuthCallback = async () => {
       try {
-        const { data, error } = await supabase.auth.getSession();
+        /*
+         * Supabase may return the verification link with:
+         *
+         * ?code=xxxx
+         *
+         * We must exchange that code for a session.
+         */
 
-        if (error) {
-          throw error;
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+
+        if (code) {
+          const { error: exchangeError } =
+            await supabase.auth.exchangeCodeForSession(code);
+
+          if (exchangeError) {
+            throw exchangeError;
+          }
+        }
+
+        /*
+         * After exchanging the code, retrieve the session.
+         */
+
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          throw sessionError;
         }
 
         if (!mounted) return;
 
-        if (data.session) {
-          navigate('/onboarding', { replace: true });
-        } else {
-          setError(
-            'Email verification could not be completed. Please try signing in.'
-          );
+        if (session) {
+          /*
+           * Verification successful.
+           *
+           * Send verified user to onboarding.
+           */
+
+          navigate('/onboarding', {
+            replace: true,
+          });
+
+          return;
         }
+
+        setError(
+          'Your email could not be verified. The verification link may have expired. Please request a new verification email.'
+        );
       } catch (err) {
         if (!mounted) return;
 
         setError(
           err instanceof Error
             ? err.message
-            : 'Verification failed. Please try again.'
+            : 'Email verification failed. Please try again.'
         );
       }
     };
 
-    handleAuth();
+    handleAuthCallback();
 
     return () => {
       mounted = false;
@@ -47,7 +84,7 @@ export default function AuthCallbackPage() {
 
   return (
     <div className="min-h-screen bg-ink-950 flex items-center justify-center p-6">
-      <div className="text-center max-w-sm">
+      <div className="w-full max-w-sm text-center">
         <Logo />
 
         {!error ? (
@@ -55,17 +92,21 @@ export default function AuthCallbackPage() {
             <div className="mt-8 mx-auto w-10 h-10 border-2 border-white/20 border-t-electric-400 rounded-full animate-spin" />
 
             <h1 className="mt-6 text-xl font-bold text-white">
-              Verifying your account
+              Verifying your email
             </h1>
 
             <p className="mt-2 text-sm text-ink-400">
-              Please wait while we finish setting up your MerchantOS account.
+              Please wait while we verify your MerchantOS account.
             </p>
           </>
         ) : (
           <>
-            <h1 className="mt-8 text-xl font-bold text-white">
-              Verification problem
+            <div className="mt-8 mx-auto w-12 h-12 rounded-full bg-danger-500/10 border border-danger-500/30 flex items-center justify-center">
+              <span className="text-danger-400 text-xl">!</span>
+            </div>
+
+            <h1 className="mt-6 text-xl font-bold text-white">
+              Verification failed
             </h1>
 
             <p className="mt-3 text-sm text-danger-300">
@@ -73,8 +114,8 @@ export default function AuthCallbackPage() {
             </p>
 
             <button
-              onClick={() => navigate('/signin')}
-              className="mt-6 px-5 py-2.5 rounded-xl bg-electric-500 text-white text-sm font-medium"
+              onClick={() => navigate('/signin', { replace: true })}
+              className="mt-6 px-5 py-2.5 rounded-xl bg-electric-500 hover:bg-electric-400 text-white text-sm font-medium transition-colors"
             >
               Go to Sign In
             </button>

@@ -29,7 +29,7 @@ export default function SignInPage() {
       password?: string;
     } = {};
 
-    const trimmedEmail = email.trim();
+    const trimmedEmail = email.trim().toLowerCase();
 
     // Validate email
     if (!trimmedEmail) {
@@ -65,15 +65,36 @@ export default function SignInPage() {
         return;
       }
 
-      if (!data.session) {
+      if (!data.session || !data.user) {
         setAuthError(
           'Unable to create a session. Please verify your email and try again.'
         );
         return;
       }
 
-      // Existing user successfully signed in
-      navigate('/app', { replace: true });
+      /*
+       * IMPORTANT:
+       *
+       * A verified user can sign in from any device.
+       * We check the local onboarding state after authentication.
+       *
+       * If onboarding has not been completed:
+       *     /onboarding
+       *
+       * If onboarding was completed:
+       *     /app
+       *
+       * The auth session itself is managed by Supabase.
+       */
+
+      const onboardingComplete =
+        data.user.user_metadata?.onboarding_complete === true;
+
+      if (onboardingComplete) {
+        navigate('/app', { replace: true });
+      } else {
+        navigate('/onboarding', { replace: true });
+      }
     } catch (error) {
       setAuthError(
         error instanceof Error
@@ -87,7 +108,7 @@ export default function SignInPage() {
 
   return (
     <div className="min-h-screen flex">
-      {/* Left panel */}
+      {/* LEFT PANEL */}
       <div className="hidden lg:flex flex-1 relative bg-ink-900 items-center justify-center p-12 overflow-hidden">
         <div className="absolute inset-0 bg-grid-faint opacity-30" />
         <div className="absolute inset-0 bg-radial-fade" />
@@ -122,7 +143,7 @@ export default function SignInPage() {
         </div>
       </div>
 
-      {/* Sign in */}
+      {/* SIGN IN PANEL */}
       <div className="flex-1 flex items-center justify-center p-6">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
