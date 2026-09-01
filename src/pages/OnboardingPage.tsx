@@ -1,11 +1,5 @@
-import {
-  useEffect,
-  useState,
-  type FormEvent,
-} from 'react';
-
+import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-
 import {
   ArrowRight,
   CheckCircle2,
@@ -44,11 +38,9 @@ export default function OnboardingPage() {
   const [checking, setChecking] = useState(true);
   const [error, setError] = useState('');
 
-  /*
-   * ------------------------------------------------------------
-   * CHECK AUTH
-   * ------------------------------------------------------------
-   */
+  // ------------------------------------------------------------
+  // CHECK AUTH
+  // ------------------------------------------------------------
 
   useEffect(() => {
     let mounted = true;
@@ -62,20 +54,9 @@ export default function OnboardingPage() {
 
         if (!mounted) return;
 
-        if (authError) {
-          console.error(
-            'Authentication check failed:',
-            authError
-          );
+        if (authError || !user) {
+          console.error('Authentication check failed:', authError);
 
-          navigate('/signin', {
-            replace: true,
-          });
-
-          return;
-        }
-
-        if (!user) {
           navigate('/signin', {
             replace: true,
           });
@@ -85,10 +66,7 @@ export default function OnboardingPage() {
 
         setChecking(false);
       } catch (err) {
-        console.error(
-          'Auth check error:',
-          err
-        );
+        console.error('Auth check error:', err);
 
         if (mounted) {
           navigate('/signin', {
@@ -105,11 +83,9 @@ export default function OnboardingPage() {
     };
   }, [navigate]);
 
-  /*
-   * ------------------------------------------------------------
-   * NORMALIZE STORE URL
-   * ------------------------------------------------------------
-   */
+  // ------------------------------------------------------------
+  // NORMALIZE STORE URL
+  // ------------------------------------------------------------
 
   const normalizeStoreUrl = (
     value: string
@@ -121,10 +97,11 @@ export default function OnboardingPage() {
     }
 
     try {
-      const url = trimmed.startsWith('http://') ||
+      const url =
+        trimmed.startsWith('http://') ||
         trimmed.startsWith('https://')
-        ? trimmed
-        : `https://${trimmed}`;
+          ? trimmed
+          : `https://${trimmed}`;
 
       new URL(url);
 
@@ -136,11 +113,9 @@ export default function OnboardingPage() {
     }
   };
 
-  /*
-   * ------------------------------------------------------------
-   * SUBMIT ONBOARDING
-   * ------------------------------------------------------------
-   */
+  // ------------------------------------------------------------
+  // SUBMIT ONBOARDING
+  // ------------------------------------------------------------
 
   const handleSubmit = async (
     event: FormEvent<HTMLFormElement>
@@ -160,6 +135,7 @@ export default function OnboardingPage() {
     const cleanContactEmail =
       contactEmail.trim();
 
+    // Validation
     if (!cleanBusinessName) {
       setError(
         'Please enter your business name.'
@@ -189,11 +165,9 @@ export default function OnboardingPage() {
     setLoading(true);
 
     try {
-      /*
-       * ----------------------------------------------------------
-       * 1. GET CURRENT USER
-       * ----------------------------------------------------------
-       */
+      // --------------------------------------------------------
+      // 1. GET CURRENT USER
+      // --------------------------------------------------------
 
       const {
         data: { user },
@@ -212,160 +186,66 @@ export default function OnboardingPage() {
         );
       }
 
-      /*
-       * ----------------------------------------------------------
-       * 2. NORMALIZE STORE URL
-       * ----------------------------------------------------------
-       */
+      // --------------------------------------------------------
+      // 2. NORMALIZE URL
+      // --------------------------------------------------------
 
       const cleanStoreUrl =
         normalizeStoreUrl(storeUrl);
 
-      /*
-       * ----------------------------------------------------------
-       * 3. FIND EXISTING ORGANIZATION MEMBERSHIP
-       * ----------------------------------------------------------
-       */
+      // --------------------------------------------------------
+      // 3. COMPLETE ONBOARDING THROUGH SECURE RPC
+      // --------------------------------------------------------
+      //
+      // IMPORTANT:
+      // We no longer directly query:
+      // organization_members
+      //
+      // This avoids the 403 RLS error.
+      //
 
       const {
-        data: membership,
-        error: membershipError,
-      } = await supabase
-        .from('organization_members')
-        .select('organization_id, role')
-        .eq('user_id', user.id)
-        .order('created_at', {
-          ascending: true,
-        })
-        .limit(1)
-        .maybeSingle();
+        data: organizationId,
+        error: onboardingError,
+      } = await supabase.rpc(
+        'complete_merchant_onboarding',
+        {
+          p_business_name:
+            cleanBusinessName,
 
-      if (membershipError) {
+          p_industry:
+            cleanIndustry,
+
+          p_store_url:
+            cleanStoreUrl,
+
+          p_contact_email:
+            cleanContactEmail ||
+            user.email ||
+            null,
+        }
+      );
+
+      if (onboardingError) {
+        console.error(
+          'Onboarding RPC failed:',
+          onboardingError
+        );
+
         throw new Error(
-          `Unable to check your organization: ${membershipError.message}`
+          onboardingError.message
         );
       }
 
-      let organizationId =
-        membership?.organization_id
-          ? String(membership.organization_id)
-          : null;
-
-      /*
-       * ----------------------------------------------------------
-       * 4. CREATE OR UPDATE ORGANIZATION
-       * ----------------------------------------------------------
-       */
-
-      if (organizationId) {
-        /*
-         * Existing organization
-         */
-
-        const {
-          error: updateError,
-        } = await supabase
-          .from('organizations')
-          .update({
-            name: cleanBusinessName,
-            industry: cleanIndustry,
-            store_url: cleanStoreUrl,
-            contact_email:
-              cleanContactEmail ||
-              user.email ||
-              null,
-          })
-          .eq('id', organizationId);
-
-        if (updateError) {
-          throw new Error(
-            `Unable to update organization: ${updateError.message}`
-          );
-        }
-      } else {
-        /*
-         * New organization
-         */
-
-        const {
-          data: organization,
-          error: organizationError,
-        } = await supabase
-          .from('organizations')
-          .insert({
-            name: cleanBusinessName,
-            industry: cleanIndustry,
-            store_url: cleanStoreUrl,
-            contact_email:
-              cleanContactEmail ||
-              user.email ||
-              null,
-          })
-          .select('id')
-          .single();
-
-        if (organizationError) {
-          console.error(
-            'Organization creation failed:',
-            organizationError
-          );
-
-          throw new Error(
-            `Unable to create your organization: ${organizationError.message}`
-          );
-        }
-
-        if (!organization?.id) {
-          throw new Error(
-            'Organization was created, but no organization ID was returned.'
-          );
-        }
-
-        organizationId = String(
-          organization.id
+      if (!organizationId) {
+        throw new Error(
+          'Onboarding completed, but no organization ID was returned.'
         );
-
-        /*
-         * --------------------------------------------------------
-         * 5. CREATE OWNER MEMBERSHIP
-         * --------------------------------------------------------
-         */
-
-        const {
-          error: createMembershipError,
-        } = await supabase
-          .from('organization_members')
-          .insert({
-            organization_id: organizationId,
-            user_id: user.id,
-            role: 'owner',
-          });
-
-        if (createMembershipError) {
-          console.error(
-            'Membership creation failed:',
-            createMembershipError
-          );
-
-          /*
-           * Best-effort cleanup.
-           */
-          await supabase
-            .from('organizations')
-            .delete()
-            .eq('id', organizationId);
-
-          throw new Error(
-            `Unable to create organization membership: ${createMembershipError.message}`
-          );
-        }
       }
 
-      /*
-       * ----------------------------------------------------------
-       * 6. UPDATE LOCAL MERCHANT STATE
-       * ----------------------------------------------------------
-       */
+      // --------------------------------------------------------
+      // 4. UPDATE LOCAL MERCHANT STATE
+      // --------------------------------------------------------
 
       updateMerchant({
         businessName:
@@ -385,19 +265,22 @@ export default function OnboardingPage() {
         onboardingComplete: true,
       });
 
-      /*
-       * ----------------------------------------------------------
-       * 7. REFRESH DATA
-       * ----------------------------------------------------------
-       */
+      // --------------------------------------------------------
+      // 5. REFRESH APPLICATION DATA
+      // --------------------------------------------------------
 
-      await refreshData();
+      try {
+        await refreshData();
+      } catch (refreshError) {
+        console.warn(
+          'Data refresh warning:',
+          refreshError
+        );
+      }
 
-      /*
-       * ----------------------------------------------------------
-       * 8. GO TO MERCHANTOS
-       * ----------------------------------------------------------
-       */
+      // --------------------------------------------------------
+      // 6. GO TO MERCHANTOS
+      // --------------------------------------------------------
 
       navigate('/app', {
         replace: true,
@@ -415,30 +298,41 @@ export default function OnboardingPage() {
         message = err.message;
       }
 
-      /*
-       * Give a useful message for common Supabase/RLS errors.
-       */
+      const lowerMessage =
+        message.toLowerCase();
 
       if (
-        message.toLowerCase().includes(
-          'row-level security'
+        lowerMessage.includes(
+          'not authenticated'
         )
       ) {
         message =
-          'Supabase blocked organization creation because of Row Level Security. Please check the organizations INSERT policy.';
-      }
-
-      if (
-        message.toLowerCase().includes(
+          'Your session has expired. Please sign in again.';
+      } else if (
+        lowerMessage.includes(
           'permission denied'
+        ) ||
+        lowerMessage.includes(
+          'row-level security'
+        ) ||
+        lowerMessage.includes(
+          'forbidden'
         )
       ) {
         message =
-          'Supabase denied access to the organization tables. Please check your RLS policies.';
-      }
-
-      if (
-        message.toLowerCase().includes(
+          'Supabase denied the onboarding request. Please make sure the onboarding RPC was created in the SQL Editor.';
+      } else if (
+        lowerMessage.includes(
+          'function'
+        ) &&
+        lowerMessage.includes(
+          'does not exist'
+        )
+      ) {
+        message =
+          'The MerchantOS onboarding function is missing. Run the SQL setup in Supabase.';
+      } else if (
+        lowerMessage.includes(
           'duplicate'
         )
       ) {
@@ -452,11 +346,9 @@ export default function OnboardingPage() {
     }
   };
 
-  /*
-   * ------------------------------------------------------------
-   * LOADING
-   * ------------------------------------------------------------
-   */
+  // ------------------------------------------------------------
+  // LOADING
+  // ------------------------------------------------------------
 
   if (checking) {
     return (
@@ -466,11 +358,9 @@ export default function OnboardingPage() {
     );
   }
 
-  /*
-   * ------------------------------------------------------------
-   * UI
-   * ------------------------------------------------------------
-   */
+  // ------------------------------------------------------------
+  // UI
+  // ------------------------------------------------------------
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center px-6 py-12">
@@ -479,6 +369,7 @@ export default function OnboardingPage() {
         {/* HEADER */}
 
         <div className="mb-10">
+
           <div className="mb-5 flex items-center gap-2 text-sm text-emerald-400">
             <CheckCircle2 className="h-4 w-4" />
 
@@ -497,6 +388,7 @@ export default function OnboardingPage() {
             configure your merchant organization
             and AI commerce profile.
           </p>
+
         </div>
 
         {/* FORM */}
@@ -639,13 +531,11 @@ export default function OnboardingPage() {
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-
                 Setting up MerchantOS...
               </>
             ) : (
               <>
                 Continue to MerchantOS
-
                 <ArrowRight className="h-4 w-4" />
               </>
             )}

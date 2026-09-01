@@ -160,83 +160,6 @@ const avatarColors = [
 ];
 
 /* ============================================================
-   SUPABASE CONFIG
-============================================================ */
-
-const SUPABASE_URL =
-  import.meta.env.VITE_SUPABASE_URL as string | undefined;
-
-const SUPABASE_PUBLISHABLE_KEY =
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as
-    | string
-    | undefined;
-
-function getSupabaseConfig() {
-  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-    throw new Error(
-      'Missing Supabase environment variables. Check VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in your .env file.'
-    );
-  }
-
-  return {
-    url: SUPABASE_URL,
-    publishableKey: SUPABASE_PUBLISHABLE_KEY,
-  };
-}
-
-/* ============================================================
-   EDGE FUNCTION REQUEST
-============================================================ */
-
-async function callEdgeFunction<T>(
-  functionName: string,
-  accessToken: string,
-  body: unknown
-): Promise<{
-  response: Response;
-  result: T;
-}> {
-  const {
-    url,
-    publishableKey,
-  } = getSupabaseConfig();
-
-  const response = await fetch(
-    `${url}/functions/v1/${functionName}`,
-    {
-      method: 'POST',
-
-      headers: {
-        'Content-Type': 'application/json',
-
-        // User authentication
-        Authorization: `Bearer ${accessToken}`,
-
-        // Supabase project publishable key
-        apikey: publishableKey,
-      },
-
-      body: JSON.stringify(body),
-    }
-  );
-
-  let result: T;
-
-  try {
-    result = (await response.json()) as T;
-  } catch {
-    throw new Error(
-      `${functionName} returned an invalid response.`
-    );
-  }
-
-  return {
-    response,
-    result,
-  };
-}
-
-/* ============================================================
    HELPERS
 ============================================================ */
 
@@ -282,16 +205,9 @@ function mapAgent(
 
   return {
     id: String(row.id),
-
     name: String(row.agent_name ?? ''),
-
-    organization: String(
-      row.provider_name ?? ''
-    ),
-
-    provider: String(
-      row.agent_identifier ?? ''
-    ),
+    organization: String(row.provider_name ?? ''),
+    provider: String(row.agent_identifier ?? ''),
 
     trustLevel:
       row.trust_level as AgentIdentity['trustLevel'],
@@ -306,9 +222,7 @@ function mapAgent(
       row.status as AgentIdentity['status'],
 
     lastActivity: row.last_activity_at
-      ? timeAgoShort(
-          String(row.last_activity_at)
-        )
+      ? timeAgoShort(String(row.last_activity_at))
       : '—',
 
     avatarColor:
@@ -329,14 +243,8 @@ function mapProduct(
     id: String(row.id),
 
     name: String(row.name ?? ''),
-
-    category: String(
-      row.category ?? ''
-    ),
-
-    price: Number(
-      row.price ?? 0
-    ),
+    category: String(row.category ?? ''),
+    price: Number(row.price ?? 0),
 
     inventory: Number(
       row.inventory_quantity ?? 0
@@ -382,20 +290,17 @@ function mapOpenTab(
   return {
     id: String(row.id),
 
-    agentId: String(
-      row.agent_id ?? ''
-    ),
+    agentId: String(row.agent_id ?? ''),
 
     agentName,
 
     trustLevel:
       trustLevel as OpenTab['trustLevel'],
 
-    scope: Array.isArray(
-      row.allowed_categories
-    )
-      ? (row.allowed_categories as string[])
-      : [],
+    scope:
+      Array.isArray(row.allowed_categories)
+        ? (row.allowed_categories as string[])
+        : [],
 
     cap: Number(
       row.authorization_cap ?? 0
@@ -467,27 +372,22 @@ function mapTransaction(
   return {
     id: String(row.id),
 
-    agentId: String(
-      row.agent_id ?? ''
-    ),
+    agentId: String(row.agent_id ?? ''),
 
     agentName,
 
     trustLevel:
       trustLevel as Transaction['trustLevel'],
 
-    products: Array.isArray(
-      row.products
-    )
-      ? (row.products as {
-          name: string;
-          price: number;
-        }[])
-      : [],
+    products:
+      Array.isArray(row.products)
+        ? (row.products as {
+            name: string;
+            price: number;
+          }[])
+        : [],
 
-    amount: Number(
-      row.amount ?? 0
-    ),
+    amount: Number(row.amount ?? 0),
 
     openTabId: row.open_tab_id
       ? String(row.open_tab_id)
@@ -532,17 +432,11 @@ function mapLedger(
         })
       : '—',
 
-    what: eventTypeToLabel(
-      eventType
-    ),
+    what: eventTypeToLabel(eventType),
 
-    why: String(
-      row.reason ?? ''
-    ),
+    why: String(row.reason ?? ''),
 
-    who: String(
-      row.actor_id ?? ''
-    ),
+    who: String(row.actor_id ?? ''),
 
     whoType:
       row.actor_type as LedgerEvent['whoType'],
@@ -578,9 +472,7 @@ function mapOpportunity(
       row.opportunity_type ?? 'general'
     ) as GrowthOpportunity['type'],
 
-    title: String(
-      row.title ?? ''
-    ),
+    title: String(row.title ?? ''),
 
     description: String(
       row.description ?? ''
@@ -600,11 +492,10 @@ function mapOpportunity(
       row.risk_level ?? 'medium'
     ) as GrowthOpportunity['risk'],
 
-    products: Array.isArray(
-      supportingData.products
-    )
-      ? (supportingData.products as string[])
-      : [],
+    products:
+      Array.isArray(supportingData.products)
+        ? (supportingData.products as string[])
+        : [],
 
     status: String(
       row.status ?? 'new'
@@ -620,8 +511,7 @@ function mapPolicy(
   row: Record<string, unknown>
 ): Policy {
   const rules =
-    (row.rules as Record<string, unknown>) ??
-    {};
+    (row.rules as Record<string, unknown>) ?? {};
 
   let value = '';
 
@@ -640,21 +530,18 @@ function mapPolicy(
       rules.max_txn_amount
     ).toLocaleString('en-IN')}`;
   } else if (
-    Array.isArray(
-      rules.allowed_categories
-    )
+    Array.isArray(rules.allowed_categories)
   ) {
-    value = (
-      rules.allowed_categories as string[]
-    ).join(', ');
+    value =
+      (rules.allowed_categories as string[]).join(
+        ', '
+      );
   } else if (
     rules.max_requests_per_min !== undefined
   ) {
     value = `${rules.max_requests_per_min} / min`;
   } else if (
-    Array.isArray(
-      rules.allowed_trust_levels
-    )
+    Array.isArray(rules.allowed_trust_levels)
   ) {
     value = (
       rules.allowed_trust_levels as string[]
@@ -676,13 +563,12 @@ function mapPolicy(
   return {
     id: String(row.id),
 
-    category: String(
-      row.policy_type ?? ''
-    ) as Policy['category'],
+    category:
+      String(
+        row.policy_type ?? ''
+      ) as Policy['category'],
 
-    name: String(
-      row.name ?? ''
-    ),
+    name: String(row.name ?? ''),
 
     description: String(
       row.description ?? ''
@@ -690,9 +576,7 @@ function mapPolicy(
 
     value,
 
-    enabled: Boolean(
-      row.enabled
-    ),
+    enabled: Boolean(row.enabled),
   };
 }
 
@@ -747,10 +631,7 @@ function eventTypeToLabel(
       'Identity validated',
   };
 
-  return (
-    labels[eventType] ??
-    eventType
-  );
+  return labels[eventType] ?? eventType;
 }
 
 /* ============================================================
@@ -802,9 +683,7 @@ export function AppProvider({
 
   const realtimeChannels =
     useRef<
-      ReturnType<
-        SupabaseClient['channel']
-      >[]
+      ReturnType<SupabaseClient['channel']>[]
     >([]);
 
   /* ============================================================
@@ -826,8 +705,7 @@ export function AppProvider({
       window.setTimeout(() => {
         setToasts((previous) =>
           previous.filter(
-            (item) =>
-              item.id !== id
+            (item) => item.id !== id
           )
         );
       }, toast.duration ?? 4000);
@@ -839,8 +717,7 @@ export function AppProvider({
     (id: string) => {
       setToasts((previous) =>
         previous.filter(
-          (item) =>
-            item.id !== id
+          (item) => item.id !== id
         )
       );
     },
@@ -848,65 +725,57 @@ export function AppProvider({
   );
 
   /* ============================================================
-     GET CURRENT ORGANIZATION
+     ORGANIZATION
   ============================================================ */
 
   const getCurrentOrganizationId =
-    useCallback(
-      async (): Promise<string | null> => {
-        if (
-          organizationIdRef.current
-        ) {
-          return organizationIdRef.current;
-        }
-
-        const {
-          data: { user },
-          error: userError,
-        } =
-          await supabase.auth.getUser();
-
-        if (userError || !user) {
-          return null;
-        }
-
-        const {
-          data: membership,
-          error,
-        } = await supabase
-          .from('organization_members')
-          .select('organization_id')
-          .eq('user_id', user.id)
-          .order('created_at', {
-            ascending: true,
-          })
-          .limit(1)
-          .maybeSingle();
-
-        if (error) {
-          console.error(
-            'Organization lookup failed:',
-            error
-          );
-
-          return null;
-        }
-
-        if (
-          !membership?.organization_id
-        ) {
-          return null;
-        }
-
-        organizationIdRef.current =
-          String(
-            membership.organization_id
-          );
-
+    useCallback(async (): Promise<string | null> => {
+      if (organizationIdRef.current) {
         return organizationIdRef.current;
-      },
-      []
-    );
+      }
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        return null;
+      }
+
+      const {
+        data: membership,
+        error,
+      } = await supabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .order('created_at', {
+          ascending: true,
+        })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.error(
+          'Organization lookup failed:',
+          error
+        );
+
+        return null;
+      }
+
+      if (!membership?.organization_id) {
+        return null;
+      }
+
+      organizationIdRef.current =
+        String(
+          membership.organization_id
+        );
+
+      return organizationIdRef.current;
+    }, []);
 
   /* ============================================================
      CLEAR DATA
@@ -915,10 +784,7 @@ export function AppProvider({
   const clearData = useCallback(() => {
     organizationIdRef.current = null;
 
-    setMerchant(
-      fallbackMerchant
-    );
-
+    setMerchant(fallbackMerchant);
     setAgents([]);
     setProducts([]);
     setOpenTabs([]);
@@ -932,8 +798,8 @@ export function AppProvider({
      REFRESH DATA
   ============================================================ */
 
-  const refreshData =
-    useCallback(async () => {
+  const refreshData = useCallback(
+    async () => {
       const organizationId =
         await getCurrentOrganizationId();
 
@@ -994,9 +860,7 @@ export function AppProvider({
             }),
 
           supabase
-            .from(
-              'trust_ledger_events'
-            )
+            .from('trust_ledger_events')
             .select('*')
             .eq(
               'organization_id',
@@ -1008,9 +872,7 @@ export function AppProvider({
             .limit(50),
 
           supabase
-            .from(
-              'revenue_opportunities'
-            )
+            .from('revenue_opportunities')
             .select('*')
             .eq(
               'organization_id',
@@ -1103,18 +965,14 @@ export function AppProvider({
           >[];
 
         setProducts(
-          productRows.map(
-            mapProduct
-          )
+          productRows.map(mapProduct)
         );
 
         const agentMap = new Map(
-          mappedAgents.map(
-            (agent) => [
-              agent.id,
-              agent,
-            ]
-          )
+          mappedAgents.map((agent) => [
+            agent.id,
+            agent,
+          ])
         );
 
         const tabRows =
@@ -1134,10 +992,8 @@ export function AppProvider({
 
             return mapOpenTab(
               row,
-              agent?.name ??
-                'Unknown',
-              agent?.trustLevel ??
-                'unknown'
+              agent?.name ?? 'Unknown',
+              agent?.trustLevel ?? 'unknown'
             );
           })
         );
@@ -1159,10 +1015,8 @@ export function AppProvider({
 
             return mapTransaction(
               row,
-              agent?.name ??
-                'Unknown',
-              agent?.trustLevel ??
-                'unknown'
+              agent?.name ?? 'Unknown',
+              agent?.trustLevel ?? 'unknown'
             );
           })
         );
@@ -1174,9 +1028,7 @@ export function AppProvider({
           >[];
 
         setLedger(
-          ledgerRows.map(
-            mapLedger
-          )
+          ledgerRows.map(mapLedger)
         );
 
         const opportunityRows =
@@ -1198,9 +1050,7 @@ export function AppProvider({
           >[];
 
         setPolicies(
-          policyRows.map(
-            mapPolicy
-          )
+          policyRows.map(mapPolicy)
         );
 
         if (orgRes.data) {
@@ -1210,37 +1060,35 @@ export function AppProvider({
               unknown
             >;
 
-          setMerchant(
-            (previous) => ({
-              ...previous,
+          setMerchant((previous) => ({
+            ...previous,
 
-              businessName: String(
-                org.name ??
-                  previous.businessName ??
-                  ''
-              ),
+            businessName: String(
+              org.name ??
+                previous.businessName ??
+                ''
+            ),
 
-              industry: String(
-                org.industry ??
-                  previous.industry ??
-                  ''
-              ),
+            industry: String(
+              org.industry ??
+                previous.industry ??
+                ''
+            ),
 
-              storeUrl: String(
-                org.store_url ??
-                  previous.storeUrl ??
-                  ''
-              ),
+            storeUrl: String(
+              org.store_url ??
+                previous.storeUrl ??
+                ''
+            ),
 
-              contactEmail: String(
-                org.contact_email ??
-                  previous.contactEmail ??
-                  ''
-              ),
+            contactEmail: String(
+              org.contact_email ??
+                previous.contactEmail ??
+                ''
+            ),
 
-              onboardingComplete: true,
-            })
-          );
+            onboardingComplete: true,
+          }));
         }
       } catch (error) {
         console.error(
@@ -1248,10 +1096,12 @@ export function AppProvider({
           error
         );
       }
-    }, [
+    },
+    [
       getCurrentOrganizationId,
       clearData,
-    ]);
+    ]
+  );
 
   /* ============================================================
      AUTH
@@ -1260,38 +1110,36 @@ export function AppProvider({
   useEffect(() => {
     let mounted = true;
 
-    const initialize =
-      async () => {
-        try {
-          const {
-            data: { session },
-          } =
-            await supabase.auth.getSession();
+    const initialize = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-          if (!mounted) return;
+        if (!mounted) return;
 
-          if (session) {
-            setAuthed(true);
+        if (session) {
+          setAuthed(true);
 
-            organizationIdRef.current =
-              null;
+          organizationIdRef.current =
+            null;
 
-            await refreshData();
-          } else {
-            setAuthed(false);
-            clearData();
-          }
-        } catch (error) {
-          console.error(
-            'Auth initialization error:',
-            error
-          );
-        } finally {
-          if (mounted) {
-            setLoading(false);
-          }
+          await refreshData();
+        } else {
+          setAuthed(false);
+          clearData();
         }
-      };
+      } catch (error) {
+        console.error(
+          'Auth initialization error:',
+          error
+        );
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
 
     void initialize();
 
@@ -1322,13 +1170,9 @@ export function AppProvider({
 
     return () => {
       mounted = false;
-
       listener.subscription.unsubscribe();
     };
-  }, [
-    refreshData,
-    clearData,
-  ]);
+  }, [refreshData, clearData]);
 
   /* ============================================================
      REALTIME
@@ -1346,8 +1190,7 @@ export function AppProvider({
         {
           event: '*',
           schema: 'public',
-          table:
-            'transaction_requests',
+          table: 'transaction_requests',
         },
         () => {
           void refreshData();
@@ -1380,8 +1223,7 @@ export function AppProvider({
         {
           event: '*',
           schema: 'public',
-          table:
-            'trust_ledger_events',
+          table: 'trust_ledger_events',
         },
         () => {
           void refreshData();
@@ -1400,122 +1242,99 @@ export function AppProvider({
 
       realtimeChannels.current =
         realtimeChannels.current.filter(
-          (item) =>
-            item !== channel
+          (item) => item !== channel
         );
     };
-  }, [
-    authed,
-    refreshData,
-  ]);
+  }, [authed, refreshData]);
 
   /* ============================================================
      MERCHANT
   ============================================================ */
 
-  const updateMerchant =
-    useCallback(
-      (
-        patch: Partial<MerchantProfile>
-      ) => {
-        setMerchant(
-          (previous) => ({
-            ...previous,
-            ...patch,
-          })
-        );
-      },
-      []
-    );
+  const updateMerchant = useCallback(
+    (
+      patch: Partial<MerchantProfile>
+    ) => {
+      setMerchant((previous) => ({
+        ...previous,
+        ...patch,
+      }));
+    },
+    []
+  );
 
   /* ============================================================
      POLICY
   ============================================================ */
 
-  const updatePolicy =
-    useCallback(
-      (
-        id: string,
-        patch: Partial<Policy>
-      ) => {
-        setPolicies(
-          (previous) =>
-            previous.map(
-              (policy) =>
-                policy.id === id
-                  ? {
-                      ...policy,
-                      ...patch,
-                    }
-                  : policy
-            )
+  const updatePolicy = useCallback(
+    (
+      id: string,
+      patch: Partial<Policy>
+    ) => {
+      setPolicies((previous) =>
+        previous.map((policy) =>
+          policy.id === id
+            ? {
+                ...policy,
+                ...patch,
+              }
+            : policy
+        )
+      );
+    },
+    []
+  );
+
+  const togglePolicy = useCallback(
+    async (id: string) => {
+      const policy = policies.find(
+        (item) => item.id === id
+      );
+
+      if (!policy) return;
+
+      const enabled = !policy.enabled;
+
+      setPolicies((previous) =>
+        previous.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                enabled,
+              }
+            : item
+        )
+      );
+
+      const { error } = await supabase
+        .from('policies')
+        .update({ enabled })
+        .eq('id', id);
+
+      if (error) {
+        setPolicies((previous) =>
+          previous.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  enabled:
+                    policy.enabled,
+                }
+              : item
+          )
         );
-      },
-      []
-    );
 
-  const togglePolicy =
-    useCallback(
-      async (id: string) => {
-        const policy =
-          policies.find(
-            (item) =>
-              item.id === id
-          );
-
-        if (!policy) return;
-
-        const enabled =
-          !policy.enabled;
-
-        setPolicies(
-          (previous) =>
-            previous.map(
-              (item) =>
-                item.id === id
-                  ? {
-                      ...item,
-                      enabled,
-                    }
-                  : item
-            )
-        );
-
-        const { error } =
-          await supabase
-            .from('policies')
-            .update({ enabled })
-            .eq('id', id);
-
-        if (error) {
-          setPolicies(
-            (previous) =>
-              previous.map(
-                (item) =>
-                  item.id === id
-                    ? {
-                        ...item,
-                        enabled:
-                          policy.enabled,
-                      }
-                    : item
-              )
-          );
-
-          pushToast({
-            type: 'error',
-            title:
-              'Policy update failed',
-            message:
-              error.message,
-          });
-        }
-      },
-      [
-        policies,
-        pushToast,
-      ]
-    );
+        pushToast({
+          type: 'error',
+          title:
+            'Policy update failed',
+          message: error.message,
+        });
+      }
+    },
+    [policies, pushToast]
+  );
 
   /* ============================================================
      OPPORTUNITY
@@ -1527,17 +1346,15 @@ export function AppProvider({
         id: string,
         status: GrowthOpportunity['status']
       ) => {
-        setOpportunities(
-          (previous) =>
-            previous.map(
-              (item) =>
-                item.id === id
-                  ? {
-                      ...item,
-                      status,
-                    }
-                  : item
-            )
+        setOpportunities((previous) =>
+          previous.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  status,
+                }
+              : item
+          )
         );
 
         const { error } =
@@ -1572,21 +1389,18 @@ export function AppProvider({
       ) => {
         const previousAgent =
           agents.find(
-            (agent) =>
-              agent.id === id
+            (agent) => agent.id === id
           );
 
-        setAgents(
-          (previous) =>
-            previous.map(
-              (agent) =>
-                agent.id === id
-                  ? {
-                      ...agent,
-                      status,
-                    }
-                  : agent
-            )
+        setAgents((previous) =>
+          previous.map((agent) =>
+            agent.id === id
+              ? {
+                  ...agent,
+                  status,
+                }
+              : agent
+          )
         );
 
         const { error } =
@@ -1602,14 +1416,12 @@ export function AppProvider({
           );
 
           if (previousAgent) {
-            setAgents(
-              (previous) =>
-                previous.map(
-                  (agent) =>
-                    agent.id === id
-                      ? previousAgent
-                      : agent
-                )
+            setAgents((previous) =>
+              previous.map((agent) =>
+                agent.id === id
+                  ? previousAgent
+                  : agent
+              )
             );
           }
         }
@@ -1629,15 +1441,61 @@ export function AppProvider({
           'id'
         >
       ) => {
-        setLedger(
-          (previous) => [
+        setLedger((previous) => [
+          {
+            ...event,
+            id: uid('e'),
+          },
+          ...previous,
+        ]);
+      },
+      []
+    );
+
+  /* ============================================================
+     EDGE FUNCTION HELPER
+     
+     IMPORTANT:
+     Uses PUBLISHABLE KEY.
+     No VITE_SUPABASE_ANON_KEY.
+  ============================================================ */
+
+  const invokeFunction =
+    useCallback(
+      async <T,>(
+        functionName: string,
+        body: Record<string, unknown>
+      ): Promise<T> => {
+        const {
+          data: { session },
+        } =
+          await supabase.auth.getSession();
+
+        if (!session) {
+          throw new Error(
+            'You must be signed in.'
+          );
+        }
+
+        const {
+          data,
+          error,
+        } =
+          await supabase.functions.invoke(
+            functionName,
             {
-              ...event,
-              id: uid('e'),
-            },
-            ...previous,
-          ]
-        );
+              body,
+            }
+          );
+
+        if (error) {
+          throw new Error(
+            error.message ||
+              `Failed to call ${functionName}.`
+          );
+        }
+
+        return data as T;
       },
       []
     );
@@ -1651,10 +1509,10 @@ export function AppProvider({
       async (
         tab: Omit<
           OpenTab,
-          | 'id'
-          | 'createdAt'
-          | 'remaining'
-          | 'status'
+          'id' |
+            'createdAt' |
+            'remaining' |
+            'status'
         >
       ): Promise<OpenTab> => {
         const organizationId =
@@ -1666,44 +1524,26 @@ export function AppProvider({
           );
         }
 
-        const {
-          data: { session },
-        } =
-          await supabase.auth.getSession();
-
-        if (!session) {
-          throw new Error(
-            'You must be signed in.'
-          );
-        }
-
-        type CreateOpenTabResult = {
+        type CreateTabResponse = {
           success?: boolean;
-
           data?: {
             open_tab?: {
               id?: string;
             };
           };
-
           error?: {
             message?: string;
           };
         };
 
-        const {
-          response,
-          result,
-        } =
-          await callEdgeFunction<CreateOpenTabResult>(
+        const result =
+          await invokeFunction<CreateTabResponse>(
             'create-open-tab',
-            session.access_token,
             {
               organization_id:
                 organizationId,
 
-              agent_id:
-                tab.agentId,
+              agent_id: tab.agentId,
 
               name: tab.agentName
                 ? `${tab.agentName} Tab`
@@ -1721,13 +1561,12 @@ export function AppProvider({
           );
 
         if (
-          !response.ok ||
           !result.success ||
           !result.data?.open_tab?.id
         ) {
           throw new Error(
             result.error?.message ??
-              `Failed to create OpenTab (${response.status}).`
+              'Failed to create OpenTab.'
           );
         }
 
@@ -1745,18 +1584,15 @@ export function AppProvider({
           createdAt: 'Just now',
         };
 
-        setOpenTabs(
-          (previous) => [
-            newTab,
-            ...previous,
-          ]
-        );
+        setOpenTabs((previous) => [
+          newTab,
+          ...previous,
+        ]);
 
         addLedgerEvent({
           time: 'Just now',
 
-          what:
-            'OpenTab activated',
+          what: 'OpenTab activated',
 
           why: `New OpenTab created for ${tab.agentName}`,
 
@@ -1764,14 +1600,14 @@ export function AppProvider({
 
           whoType: 'merchant',
 
-          policy:
-            'opentab-scope',
+          policy: 'opentab-scope',
         });
 
         return newTab;
       },
       [
         getCurrentOrganizationId,
+        invokeFunction,
         addLedgerEvent,
       ]
     );
@@ -1788,7 +1624,6 @@ export function AppProvider({
             .from('open_tabs')
             .update({
               status: 'paused',
-
               paused_at:
                 new Date().toISOString(),
             })
@@ -1797,37 +1632,28 @@ export function AppProvider({
         if (error) {
           pushToast({
             type: 'error',
-
             title:
               'Unable to pause OpenTab',
-
-            message:
-              error.message,
+            message: error.message,
           });
 
           return;
         }
 
-        setOpenTabs(
-          (previous) =>
-            previous.map(
-              (tab) =>
-                tab.id === id
-                  ? {
-                      ...tab,
-                      status:
-                        'paused',
-                    }
-                  : tab
-            )
+        setOpenTabs((previous) =>
+          previous.map((tab) =>
+            tab.id === id
+              ? {
+                  ...tab,
+                  status: 'paused',
+                }
+              : tab
+          )
         );
 
         pushToast({
           type: 'info',
-
-          title:
-            'OpenTab paused',
-
+          title: 'OpenTab paused',
           message:
             'The agent can no longer request transactions.',
         });
@@ -1847,9 +1673,7 @@ export function AppProvider({
             .from('open_tabs')
             .update({
               status: 'revoked',
-
               remaining_amount: 0,
-
               revoked_at:
                 new Date().toISOString(),
             })
@@ -1858,40 +1682,29 @@ export function AppProvider({
         if (error) {
           pushToast({
             type: 'error',
-
             title:
               'Unable to revoke OpenTab',
-
-            message:
-              error.message,
+            message: error.message,
           });
 
           return;
         }
 
-        setOpenTabs(
-          (previous) =>
-            previous.map(
-              (tab) =>
-                tab.id === id
-                  ? {
-                      ...tab,
-
-                      status:
-                        'revoked',
-
-                      remaining: 0,
-                    }
-                  : tab
-            )
+        setOpenTabs((previous) =>
+          previous.map((tab) =>
+            tab.id === id
+              ? {
+                  ...tab,
+                  status: 'revoked',
+                  remaining: 0,
+                }
+              : tab
+          )
         );
 
         pushToast({
           type: 'warning',
-
-          title:
-            'OpenTab revoked',
-
+          title: 'OpenTab revoked',
           message:
             'All transaction authority has been removed.',
         });
@@ -1906,12 +1719,10 @@ export function AppProvider({
   const addTransaction =
     useCallback(
       (txn: Transaction) => {
-        setTransactions(
-          (previous) => [
-            txn,
-            ...previous,
-          ]
-        );
+        setTransactions((previous) => [
+          txn,
+          ...previous,
+        ]);
       },
       []
     );
@@ -1923,80 +1734,47 @@ export function AppProvider({
   const approveEscalatedTransaction =
     useCallback(
       async (id: string) => {
-        const {
-          data: { session },
-        } =
-          await supabase.auth.getSession();
-
-        if (!session) {
-          pushToast({
-            type: 'error',
-
-            title:
-              'Not authenticated',
-
-            message:
-              'Please sign in again.',
-          });
-
-          return;
-        }
-
-        const organizationId =
-          await getCurrentOrganizationId();
-
-        if (!organizationId) {
-          pushToast({
-            type: 'error',
-
-            title:
-              'Organization not found',
-
-            message:
-              'Your merchant organization could not be found.',
-          });
-
-          return;
-        }
-
-        type ApprovalResult = {
-          success?: boolean;
-
-          error?: {
-            message?: string;
-          };
-        };
-
         try {
-          const {
-            response,
-            result,
-          } =
-            await callEdgeFunction<ApprovalResult>(
-              'approve-transaction',
-              session.access_token,
-              {
-                transaction_id:
-                  id,
+          const organizationId =
+            await getCurrentOrganizationId();
 
+          if (!organizationId) {
+            pushToast({
+              type: 'error',
+              title:
+                'Organization not found',
+              message:
+                'Your merchant organization could not be found.',
+            });
+
+            return;
+          }
+
+          type Result = {
+            success?: boolean;
+            error?: {
+              message?: string;
+            };
+          };
+
+          const result =
+            await invokeFunction<Result>(
+              'approve-transaction',
+              {
+                transaction_id: id,
                 organization_id:
                   organizationId,
               }
             );
 
-          if (
-            !response.ok ||
-            !result.success
-          ) {
+          if (!result.success) {
             pushToast({
               type: 'error',
-
               title:
                 'Approval failed',
-
               message:
                 result.error?.message ??
-                `Failed to approve transaction (${response.status}).`,
+                'Failed to approve transaction.',
             });
 
             return;
@@ -2004,10 +1782,8 @@ export function AppProvider({
 
           pushToast({
             type: 'success',
-
             title:
               'Transaction approved',
-
             message:
               'Payment has been confirmed.',
           });
@@ -2016,19 +1792,18 @@ export function AppProvider({
         } catch (error) {
           pushToast({
             type: 'error',
-
             title:
               'Approval failed',
-
             message:
               error instanceof Error
                 ? error.message
-                : 'Unexpected approval error.',
+                : 'Unexpected error.',
           });
         }
       },
       [
         getCurrentOrganizationId,
+        invokeFunction,
         pushToast,
         refreshData,
       ]
@@ -2041,80 +1816,47 @@ export function AppProvider({
   const declineEscalatedTransaction =
     useCallback(
       async (id: string) => {
-        const {
-          data: { session },
-        } =
-          await supabase.auth.getSession();
-
-        if (!session) {
-          pushToast({
-            type: 'error',
-
-            title:
-              'Not authenticated',
-
-            message:
-              'Please sign in again.',
-          });
-
-          return;
-        }
-
-        const organizationId =
-          await getCurrentOrganizationId();
-
-        if (!organizationId) {
-          pushToast({
-            type: 'error',
-
-            title:
-              'Organization not found',
-
-            message:
-              'Your merchant organization could not be found.',
-          });
-
-          return;
-        }
-
-        type DeclineResult = {
-          success?: boolean;
-
-          error?: {
-            message?: string;
-          };
-        };
-
         try {
-          const {
-            response,
-            result,
-          } =
-            await callEdgeFunction<DeclineResult>(
-              'decline-transaction',
-              session.access_token,
-              {
-                transaction_id:
-                  id,
+          const organizationId =
+            await getCurrentOrganizationId();
 
+          if (!organizationId) {
+            pushToast({
+              type: 'error',
+              title:
+                'Organization not found',
+              message:
+                'Your merchant organization could not be found.',
+            });
+
+            return;
+          }
+
+          type Result = {
+            success?: boolean;
+            error?: {
+              message?: string;
+            };
+          };
+
+          const result =
+            await invokeFunction<Result>(
+              'decline-transaction',
+              {
+                transaction_id: id,
                 organization_id:
                   organizationId,
               }
             );
 
-          if (
-            !response.ok ||
-            !result.success
-          ) {
+          if (!result.success) {
             pushToast({
               type: 'error',
-
               title:
                 'Decline failed',
-
               message:
                 result.error?.message ??
-                `Failed to decline transaction (${response.status}).`,
+                'Failed to decline transaction.',
             });
 
             return;
@@ -2122,10 +1864,8 @@ export function AppProvider({
 
           pushToast({
             type: 'warning',
-
             title:
               'Transaction declined',
-
             message:
               'The request has been denied.',
           });
@@ -2134,19 +1874,18 @@ export function AppProvider({
         } catch (error) {
           pushToast({
             type: 'error',
-
             title:
               'Decline failed',
-
             message:
               error instanceof Error
                 ? error.message
-                : 'Unexpected decline error.',
+                : 'Unexpected error.',
           });
         }
       },
       [
         getCurrentOrganizationId,
+        invokeFunction,
         pushToast,
         refreshData,
       ]
@@ -2160,21 +1899,17 @@ export function AppProvider({
     useCallback(
       async (params: {
         agentId: string;
-
         products: {
           name: string;
           price: number;
         }[];
-
         openTabId?: string;
       }) => {
         const amount =
           params.products.reduce(
             (sum, product) =>
               sum +
-              Number(
-                product.price || 0
-              ),
+              Number(product.price || 0),
             0
           );
 
@@ -2186,102 +1921,48 @@ export function AppProvider({
         const stages: TxnStage[] = [
           {
             id: 's1',
-
-            label:
-              'Agent Request',
-
-            status:
-              'pending',
-
+            label: 'Agent Request',
+            status: 'pending',
             detail: `Agent requested purchase of ${params.products
-              .map(
-                (p) =>
-                  p.name
-              )
+              .map((p) => p.name)
               .join(', ')}`,
           },
-
           {
             id: 's2',
-
             label:
               'Identity Verification',
-
-            status:
-              'pending',
+            status: 'pending',
           },
-
           {
             id: 's3',
-
-            label:
-              'Catalog Validation',
-
-            status:
-              'pending',
+            label: 'Catalog Validation',
+            status: 'pending',
           },
-
           {
             id: 's4',
-
-            label:
-              'Policy Check',
-
-            status:
-              'pending',
+            label: 'Policy Check',
+            status: 'pending',
           },
-
           {
             id: 's5',
-
             label:
               'OpenTab Validation',
-
-            status:
-              'pending',
+            status: 'pending',
           },
-
           {
             id: 's6',
-
-            label:
-              'Payment Initiated',
-
-            status:
-              'pending',
+            label: 'Payment Initiated',
+            status: 'pending',
           },
-
           {
             id: 's7',
-
             label:
               'Payment Confirmed',
-
-            status:
-              'pending',
+            status: 'pending',
           },
         ];
 
         try {
-          const {
-            data: { session },
-          } =
-            await supabase.auth.getSession();
-
-          if (!session) {
-            return {
-              decision:
-                'declined' as TxnDecision,
-
-              reason:
-                'You must be signed in to evaluate a transaction.',
-
-              stages,
-
-              amount,
-            };
-          }
-
           const organizationId =
             await getCurrentOrganizationId();
 
@@ -2289,21 +1970,16 @@ export function AppProvider({
             return {
               decision:
                 'declined' as TxnDecision,
-
               reason:
                 'No merchant organization was found for this account.',
-
               stages,
-
               amount,
             };
           }
 
           stages[0] = {
             ...stages[0],
-
-            status:
-              'passed',
+            status: 'passed',
           };
 
           type EvaluationResult = {
@@ -2311,19 +1987,15 @@ export function AppProvider({
 
             data?: {
               decision?: TxnDecision;
-
               reason?: string;
 
               checks?: Array<{
                 label?: string;
-
                 passed?: boolean;
-
                 detail?: string;
               }>;
 
               transaction_id?: string;
-
               transaction_request_id?: string;
             };
 
@@ -2332,13 +2004,9 @@ export function AppProvider({
             };
           };
 
-          const {
-            response,
-            result,
-          } =
-            await callEdgeFunction<EvaluationResult>(
+          const result =
+            await invokeFunction<EvaluationResult>(
               'evaluate-transaction',
-              session.access_token,
               {
                 organization_id:
                   organizationId,
@@ -2353,28 +2021,9 @@ export function AppProvider({
                   idempotencyKey,
 
                 open_tab_id:
-                  params.openTabId ??
-                  null,
+                  params.openTabId ?? null,
               }
             );
-
-          if (
-            !response.ok &&
-            !result.data?.decision
-          ) {
-            return {
-              decision:
-                'declined' as TxnDecision,
-
-              reason:
-                result.error?.message ??
-                `Transaction evaluation failed (${response.status}).`,
-
-              stages,
-
-              amount,
-            };
-          }
 
           if (!result.data) {
             return {
@@ -2391,150 +2040,105 @@ export function AppProvider({
             };
           }
 
-          const data =
-            result.data;
+          const data = result.data;
 
           const decision: TxnDecision =
-            data.decision ===
-                'approved' ||
-            data.decision ===
-                'declined' ||
-            data.decision ===
-                'escalated'
+            data.decision === 'approved' ||
+            data.decision === 'declined' ||
+            data.decision === 'escalated'
               ? data.decision
               : 'declined';
 
           const checks =
             data.checks ?? [];
 
-          checks.forEach(
-            (check) => {
-              const label =
-                String(
-                  check.label ??
-                    ''
-                ).toLowerCase();
+          checks.forEach((check) => {
+            const label =
+              String(
+                check.label ?? ''
+              ).toLowerCase();
 
-              let index = -1;
+            let index = -1;
 
-              if (
-                label.includes(
-                  'identity'
-                )
-              ) {
-                index = 1;
-              } else if (
-                label.includes(
-                  'catalog'
-                )
-              ) {
-                index = 2;
-              } else if (
-                label.includes(
-                  'policy'
-                )
-              ) {
-                index = 3;
-              } else if (
-                label.includes(
-                  'opentab'
-                ) ||
-                label.includes(
-                  'open tab'
-                )
-              ) {
-                index = 4;
-              } else if (
-                label.includes(
-                  'payment'
-                )
-              ) {
-                index = 5;
-              }
-
-              if (index >= 0) {
-                stages[index] = {
-                  ...stages[index],
-
-                  status:
-                    check.passed
-                      ? 'passed'
-                      : 'failed',
-
-                  detail:
-                    check.detail ??
-                    '',
-                };
-              }
+            if (
+              label.includes('identity')
+            ) {
+              index = 1;
+            } else if (
+              label.includes('catalog')
+            ) {
+              index = 2;
+            } else if (
+              label.includes('policy')
+            ) {
+              index = 3;
+            } else if (
+              label.includes('opentab') ||
+              label.includes('open tab')
+            ) {
+              index = 4;
+            } else if (
+              label.includes('payment')
+            ) {
+              index = 5;
             }
-          );
 
-          if (
-            decision ===
-            'approved'
-          ) {
+            if (index >= 0) {
+              stages[index] = {
+                ...stages[index],
+
+                status:
+                  check.passed
+                    ? 'passed'
+                    : 'failed',
+
+                detail:
+                  check.detail ?? '',
+              };
+            }
+          });
+
+          if (decision === 'approved') {
             stages[5] = {
               ...stages[5],
-
-              status:
-                'passed',
-
+              status: 'passed',
               detail:
                 'Payment handed to provider.',
             };
 
             stages[6] = {
               ...stages[6],
-
-              status:
-                'passed',
-
+              status: 'passed',
               detail:
                 'Payment provider confirmed.',
             };
           }
 
-          if (
-            decision ===
-            'escalated'
-          ) {
+          if (decision === 'escalated') {
             stages[5] = {
               ...stages[5],
-
-              status:
-                'skipped',
-
+              status: 'skipped',
               detail:
                 'Waiting for merchant approval.',
             };
 
             stages[6] = {
               ...stages[6],
-
-              status:
-                'skipped',
-
+              status: 'skipped',
               detail:
                 'Waiting for merchant approval.',
             };
           }
 
-          if (
-            decision ===
-            'declined'
-          ) {
+          if (decision === 'declined') {
             stages[5] = {
               ...stages[5],
-
-              status:
-                'skipped',
+              status: 'skipped',
             };
 
             stages[6] = {
               ...stages[6],
-
-              status:
-                'skipped',
+              status: 'skipped',
             };
           }
 
@@ -2544,8 +2148,7 @@ export function AppProvider({
             decision,
 
             reason:
-              data.reason ??
-              '',
+              data.reason ?? '',
 
             stages,
 
@@ -2580,6 +2183,7 @@ export function AppProvider({
       },
       [
         getCurrentOrganizationId,
+        invokeFunction,
         refreshData,
       ]
     );
@@ -2588,17 +2192,16 @@ export function AppProvider({
      SIGN OUT
   ============================================================ */
 
-  const signOut =
-    useCallback(
-      async () => {
-        await supabase.auth.signOut();
+  const signOut = useCallback(
+    async () => {
+      await supabase.auth.signOut();
 
-        clearData();
+      clearData();
 
-        setAuthed(false);
-      },
-      [clearData]
-    );
+      setAuthed(false);
+    },
+    [clearData]
+  );
 
   /* ============================================================
      CONTEXT VALUE
@@ -2606,25 +2209,15 @@ export function AppProvider({
 
   const value: AppContextValue = {
     merchant,
-
     agents,
-
     products,
-
     openTabs,
-
     transactions,
-
     ledger,
-
     opportunities,
-
     policies,
-
     toasts,
-
     authed,
-
     loading,
 
     setAuthed,
@@ -2665,9 +2258,7 @@ export function AppProvider({
   };
 
   return (
-    <AppContext.Provider
-      value={value}
-    >
+    <AppContext.Provider value={value}>
       {children}
     </AppContext.Provider>
   );
