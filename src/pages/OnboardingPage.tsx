@@ -1,5 +1,11 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useState,
+  type FormEvent,
+} from 'react';
+
 import { useNavigate } from 'react-router-dom';
+
 import {
   ArrowRight,
   CheckCircle2,
@@ -38,10 +44,6 @@ export default function OnboardingPage() {
   const [checking, setChecking] = useState(true);
   const [error, setError] = useState('');
 
-  // ------------------------------------------------------------
-  // CHECK AUTH
-  // ------------------------------------------------------------
-
   useEffect(() => {
     let mounted = true;
 
@@ -52,10 +54,15 @@ export default function OnboardingPage() {
           error: authError,
         } = await supabase.auth.getUser();
 
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
 
         if (authError || !user) {
-          console.error('Authentication check failed:', authError);
+          console.error(
+            'Authentication check failed:',
+            authError
+          );
 
           navigate('/signin', {
             replace: true,
@@ -65,8 +72,11 @@ export default function OnboardingPage() {
         }
 
         setChecking(false);
-      } catch (err) {
-        console.error('Auth check error:', err);
+      } catch (error) {
+        console.error(
+          'Authentication check error:',
+          error
+        );
 
         if (mounted) {
           navigate('/signin', {
@@ -83,10 +93,6 @@ export default function OnboardingPage() {
     };
   }, [navigate]);
 
-  // ------------------------------------------------------------
-  // NORMALIZE STORE URL
-  // ------------------------------------------------------------
-
   const normalizeStoreUrl = (
     value: string
   ): string | null => {
@@ -96,16 +102,22 @@ export default function OnboardingPage() {
       return null;
     }
 
+    const url =
+      /^https?:\/\//i.test(trimmed)
+        ? trimmed
+        : `https://${trimmed}`;
+
     try {
-      const url =
-        trimmed.startsWith('http://') ||
-        trimmed.startsWith('https://')
-          ? trimmed
-          : `https://${trimmed}`;
+      const parsedUrl = new URL(url);
 
-      new URL(url);
+      if (
+        parsedUrl.protocol !== 'http:' &&
+        parsedUrl.protocol !== 'https:'
+      ) {
+        throw new Error();
+      }
 
-      return url;
+      return parsedUrl.toString();
     } catch {
       throw new Error(
         'Please enter a valid store URL.'
@@ -113,16 +125,14 @@ export default function OnboardingPage() {
     }
   };
 
-  // ------------------------------------------------------------
-  // SUBMIT ONBOARDING
-  // ------------------------------------------------------------
-
   const handleSubmit = async (
     event: FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
 
-    if (loading) return;
+    if (loading) {
+      return;
+    }
 
     setError('');
 
@@ -133,9 +143,8 @@ export default function OnboardingPage() {
       industry.trim();
 
     const cleanContactEmail =
-      contactEmail.trim();
+      contactEmail.trim().toLowerCase();
 
-    // Validation
     if (!cleanBusinessName) {
       setError(
         'Please enter your business name.'
@@ -165,10 +174,6 @@ export default function OnboardingPage() {
     setLoading(true);
 
     try {
-      // --------------------------------------------------------
-      // 1. GET CURRENT USER
-      // --------------------------------------------------------
-
       const {
         data: { user },
         error: userError,
@@ -186,39 +191,27 @@ export default function OnboardingPage() {
         );
       }
 
-      // --------------------------------------------------------
-      // 2. NORMALIZE URL
-      // --------------------------------------------------------
-
       const cleanStoreUrl =
         normalizeStoreUrl(storeUrl);
 
-      // --------------------------------------------------------
-      // 3. COMPLETE ONBOARDING THROUGH SECURE RPC
-      // --------------------------------------------------------
-      //
-      // IMPORTANT:
-      // We no longer directly query:
-      // organization_members
-      //
-      // This avoids the 403 RLS error.
-      //
-
+      /*
+       * IMPORTANT:
+       *
+       * Do NOT insert directly into organization_members
+       * from the browser.
+       *
+       * The secure Supabase RPC creates the organization
+       * and membership using auth.uid().
+       */
       const {
         data: organizationId,
         error: onboardingError,
       } = await supabase.rpc(
         'complete_merchant_onboarding',
         {
-          p_business_name:
-            cleanBusinessName,
-
-          p_industry:
-            cleanIndustry,
-
-          p_store_url:
-            cleanStoreUrl,
-
+          p_business_name: cleanBusinessName,
+          p_industry: cleanIndustry,
+          p_store_url: cleanStoreUrl,
           p_contact_email:
             cleanContactEmail ||
             user.email ||
@@ -243,32 +236,27 @@ export default function OnboardingPage() {
         );
       }
 
-      // --------------------------------------------------------
-      // 4. UPDATE LOCAL MERCHANT STATE
-      // --------------------------------------------------------
-
+      /*
+       * Update local state using the REAL organization
+       * returned by Supabase.
+       */
       updateMerchant({
-        businessName:
-          cleanBusinessName,
-
-        industry:
-          cleanIndustry,
-
-        storeUrl:
-          cleanStoreUrl ?? '',
-
+        businessName: cleanBusinessName,
+        industry: cleanIndustry,
+        storeUrl: cleanStoreUrl ?? '',
         contactEmail:
           cleanContactEmail ||
           user.email ||
           '',
-
         onboardingComplete: true,
       });
 
-      // --------------------------------------------------------
-      // 5. REFRESH APPLICATION DATA
-      // --------------------------------------------------------
-
+      /*
+       * Refresh all application data.
+       *
+       * store.tsx must use the organization created
+       * for the authenticated user.
+       */
       try {
         await refreshData();
       } catch (refreshError) {
@@ -278,24 +266,20 @@ export default function OnboardingPage() {
         );
       }
 
-      // --------------------------------------------------------
-      // 6. GO TO MERCHANTOS
-      // --------------------------------------------------------
-
       navigate('/app', {
         replace: true,
       });
-    } catch (err) {
+    } catch (error) {
       console.error(
         'Onboarding failed:',
-        err
+        error
       );
 
       let message =
         'Unable to complete onboarding. Please try again.';
 
-      if (err instanceof Error) {
-        message = err.message;
+      if (error instanceof Error) {
+        message = error.message;
       }
 
       const lowerMessage =
@@ -304,6 +288,9 @@ export default function OnboardingPage() {
       if (
         lowerMessage.includes(
           'not authenticated'
+        ) ||
+        lowerMessage.includes(
+          'session has expired'
         )
       ) {
         message =
@@ -317,27 +304,29 @@ export default function OnboardingPage() {
         ) ||
         lowerMessage.includes(
           'forbidden'
-        )
+        ) ||
+        lowerMessage.includes('403')
       ) {
         message =
-          'Supabase denied the onboarding request. Please make sure the onboarding RPC was created in the SQL Editor.';
+          'Supabase denied the onboarding request. Make sure the complete_merchant_onboarding RPC and its security policies are configured correctly.';
       } else if (
-        lowerMessage.includes(
-          'function'
-        ) &&
+        lowerMessage.includes('function') &&
         lowerMessage.includes(
           'does not exist'
         )
       ) {
         message =
-          'The MerchantOS onboarding function is missing. Run the SQL setup in Supabase.';
+          'The MerchantOS onboarding function is missing. Create complete_merchant_onboarding in the Supabase SQL Editor.';
       } else if (
         lowerMessage.includes(
           'duplicate'
+        ) ||
+        lowerMessage.includes(
+          'already exists'
         )
       ) {
         message =
-          'This account already has an organization. Please refresh and continue.';
+          'This account already has an organization. Please continue to MerchantOS.';
       }
 
       setError(message);
@@ -345,10 +334,6 @@ export default function OnboardingPage() {
       setLoading(false);
     }
   };
-
-  // ------------------------------------------------------------
-  // LOADING
-  // ------------------------------------------------------------
 
   if (checking) {
     return (
@@ -358,24 +343,13 @@ export default function OnboardingPage() {
     );
   }
 
-  // ------------------------------------------------------------
-  // UI
-  // ------------------------------------------------------------
-
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-2xl">
-
-        {/* HEADER */}
-
         <div className="mb-10">
-
           <div className="mb-5 flex items-center gap-2 text-sm text-emerald-400">
             <CheckCircle2 className="h-4 w-4" />
-
-            <span>
-              MerchantOS setup
-            </span>
+            <span>MerchantOS setup</span>
           </div>
 
           <h1 className="text-4xl font-semibold tracking-tight">
@@ -388,18 +362,12 @@ export default function OnboardingPage() {
             configure your merchant organization
             and AI commerce profile.
           </p>
-
         </div>
-
-        {/* FORM */}
 
         <form
           onSubmit={handleSubmit}
           className="space-y-6"
         >
-
-          {/* BUSINESS NAME */}
-
           <div>
             <label
               htmlFor="businessName"
@@ -424,8 +392,6 @@ export default function OnboardingPage() {
             />
           </div>
 
-          {/* INDUSTRY */}
-
           <div>
             <label
               htmlFor="industry"
@@ -449,15 +415,12 @@ export default function OnboardingPage() {
             />
           </div>
 
-          {/* STORE URL */}
-
           <div>
             <label
               htmlFor="storeUrl"
               className="mb-2 block text-sm font-medium text-zinc-200"
             >
               Store URL
-
               <span className="ml-2 text-zinc-500">
                 optional
               </span>
@@ -480,15 +443,12 @@ export default function OnboardingPage() {
             />
           </div>
 
-          {/* CONTACT EMAIL */}
-
           <div>
             <label
               htmlFor="contactEmail"
               className="mb-2 block text-sm font-medium text-zinc-200"
             >
               Business contact email
-
               <span className="ml-2 text-zinc-500">
                 optional
               </span>
@@ -510,8 +470,6 @@ export default function OnboardingPage() {
             />
           </div>
 
-          {/* ERROR */}
-
           {error && (
             <div
               role="alert"
@@ -520,8 +478,6 @@ export default function OnboardingPage() {
               {error}
             </div>
           )}
-
-          {/* SUBMIT */}
 
           <button
             type="submit"
@@ -540,7 +496,6 @@ export default function OnboardingPage() {
               </>
             )}
           </button>
-
         </form>
       </div>
     </div>

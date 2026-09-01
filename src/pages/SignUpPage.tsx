@@ -15,89 +15,101 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { supabase } from '@/lib/supabase';
 
+type FormState = {
+  name: string;
+  email: string;
+  password: string;
+  confirm: string;
+};
+
+type FormErrors = Record<string, string>;
+
 export default function SignUpPage() {
   const navigate = useNavigate();
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<FormState>({
     name: '',
     email: '',
     password: '',
     confirm: '',
   });
 
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<FormErrors>({});
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const updateField = (field: keyof FormState, value: string) => {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
 
-    const errs: Record<string, string> = {};
+    setErrors((current) => ({
+      ...current,
+      [field]: '',
+    }));
+
+    setAuthError('');
+  };
+
+  const handleSubmit = async (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+
+    if (loading) {
+      return;
+    }
+
+    setErrors({});
+    setAuthError('');
+    setSuccessMessage('');
 
     const name = form.name.trim();
     const email = form.email.trim().toLowerCase();
 
-    // -------------------------
-    // VALIDATION
-    // -------------------------
+    const validationErrors: FormErrors = {};
 
     if (!name) {
-      errs.name = 'Name is required';
+      validationErrors.name = 'Name is required.';
     }
 
     if (!email) {
-      errs.email = 'Email is required';
-    } else if (!/^\S+@\S+\.\S+$/.test(email)) {
-      errs.email = 'Enter a valid email';
+      validationErrors.email = 'Email is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      validationErrors.email = 'Enter a valid email.';
     }
 
     if (!form.password) {
-      errs.password = 'Password is required';
+      validationErrors.password = 'Password is required.';
     } else if (form.password.length < 6) {
-      errs.password = 'At least 6 characters';
+      validationErrors.password = 'At least 6 characters.';
     }
 
     if (!form.confirm) {
-      errs.confirm = 'Please confirm your password';
+      validationErrors.confirm = 'Please confirm your password.';
     } else if (form.confirm !== form.password) {
-      errs.confirm = 'Passwords do not match';
+      validationErrors.confirm = 'Passwords do not match.';
     }
 
-    setErrors(errs);
-
-    if (Object.keys(errs).length > 0) {
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
       return;
     }
 
-    setAuthError('');
-    setSuccessMessage('');
     setLoading(true);
 
     try {
-      /*
-       * IMPORTANT
-       *
-       * The verification email will open:
-       *
-       * https://YOUR-VERCEL-DOMAIN/auth/callback
-       *
-       * AuthCallbackPage will exchange the Supabase
-       * verification code for a session.
-       */
-
-      const redirectUrl =
-        `${window.location.origin}/auth/callback`;
+      const redirectUrl = `${window.location.origin}/auth/callback`;
 
       const { data, error } = await supabase.auth.signUp({
         email,
         password: form.password,
-
         options: {
           data: {
             full_name: name,
           },
-
           emailRedirectTo: redirectUrl,
         },
       });
@@ -107,41 +119,29 @@ export default function SignUpPage() {
         return;
       }
 
-      /*
-       * EMAIL CONFIRMATION ENABLED
-       *
-       * User exists but does not have a session yet.
-       */
+      if (!data.user) {
+        setAuthError(
+          'Account creation failed. Please try again.'
+        );
+        return;
+      }
 
-      if (data.user && !data.session) {
+      if (!data.session) {
         setSuccessMessage(
           'Account created successfully. Check your email and click the verification link to continue.'
         );
-
         return;
       }
 
-      /*
-       * EMAIL CONFIRMATION DISABLED
-       *
-       * User already has a session.
-       */
-
-      if (data.user && data.session) {
-        navigate('/onboarding', {
-          replace: true,
-        });
-
-        return;
-      }
+      navigate('/onboarding', {
+        replace: true,
+      });
+    } catch (error) {
+      console.error('Sign up error:', error);
 
       setAuthError(
-        'Account creation completed, but authentication could not be established. Please try signing in.'
-      );
-    } catch (err) {
-      setAuthError(
-        err instanceof Error
-          ? err.message
+        error instanceof Error
+          ? error.message
           : 'Unable to create your account. Please try again.'
       );
     } finally {
@@ -152,7 +152,6 @@ export default function SignUpPage() {
   return (
     <div className="min-h-screen flex">
       {/* LEFT PANEL */}
-
       <div className="hidden lg:flex flex-1 relative bg-ink-900 items-center justify-center p-12 overflow-hidden">
         <div className="absolute inset-0 bg-grid-faint opacity-30" />
         <div className="absolute inset-0 bg-radial-fade" />
@@ -183,7 +182,6 @@ export default function SignUpPage() {
       </div>
 
       {/* SIGN UP */}
-
       <div className="flex-1 flex items-center justify-center p-6">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -202,18 +200,20 @@ export default function SignUpPage() {
             Start building your AI commerce workspace.
           </p>
 
-          {/* ERROR */}
-
           {authError && (
-            <div className="mt-4 p-3 rounded-xl bg-danger-500/10 border border-danger-500/30 text-danger-300 text-sm">
+            <div
+              role="alert"
+              className="mt-4 p-3 rounded-xl bg-danger-500/10 border border-danger-500/30 text-danger-300 text-sm"
+            >
               {authError}
             </div>
           )}
 
-          {/* SUCCESS / EMAIL VERIFICATION */}
-
           {successMessage && (
-            <div className="mt-4 p-4 rounded-xl bg-success-500/10 border border-success-500/30 text-success-300 text-sm">
+            <div
+              role="status"
+              className="mt-4 p-4 rounded-xl bg-success-500/10 border border-success-500/30 text-success-300 text-sm"
+            >
               <div className="flex items-start gap-2">
                 <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
 
@@ -236,25 +236,22 @@ export default function SignUpPage() {
             </div>
           )}
 
-          {/* FORM */}
-
           <form
             onSubmit={handleSubmit}
             className="mt-8 space-y-4"
+            noValidate
           >
             <Input
               label="Full name"
               placeholder="Jane Merchant"
               icon={<User className="w-4 h-4" />}
               value={form.name}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  name: e.target.value,
-                })
+              onChange={(event) =>
+                updateField('name', event.target.value)
               }
               error={errors.name}
               autoComplete="name"
+              disabled={loading}
             />
 
             <Input
@@ -263,14 +260,12 @@ export default function SignUpPage() {
               placeholder="you@business.com"
               icon={<Mail className="w-4 h-4" />}
               value={form.email}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  email: e.target.value,
-                })
+              onChange={(event) =>
+                updateField('email', event.target.value)
               }
               error={errors.email}
               autoComplete="email"
+              disabled={loading}
             />
 
             <Input
@@ -279,14 +274,12 @@ export default function SignUpPage() {
               placeholder="••••••••"
               icon={<Lock className="w-4 h-4" />}
               value={form.password}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  password: e.target.value,
-                })
+              onChange={(event) =>
+                updateField('password', event.target.value)
               }
               error={errors.password}
               autoComplete="new-password"
+              disabled={loading}
             />
 
             <Input
@@ -295,14 +288,12 @@ export default function SignUpPage() {
               placeholder="••••••••"
               icon={<Lock className="w-4 h-4" />}
               value={form.confirm}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  confirm: e.target.value,
-                })
+              onChange={(event) =>
+                updateField('confirm', event.target.value)
               }
               error={errors.confirm}
               autoComplete="new-password"
+              disabled={loading}
             />
 
             <Button

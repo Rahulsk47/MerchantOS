@@ -185,14 +185,14 @@ function timeAgoShort(
     return '—';
   }
 
-  const diff =
-    Math.max(
-      0,
-      Date.now() - timestamp
-    );
+  const diff = Math.max(
+    0,
+    Date.now() - timestamp
+  );
 
-  const mins =
-    Math.floor(diff / 60000);
+  const mins = Math.floor(
+    diff / 60000
+  );
 
   if (mins < 1) {
     return 'just now';
@@ -202,8 +202,9 @@ function timeAgoShort(
     return `${mins}m ago`;
   }
 
-  const hrs =
-    Math.floor(mins / 60);
+  const hrs = Math.floor(
+    mins / 60
+  );
 
   if (hrs < 24) {
     return `${hrs}h ago`;
@@ -446,26 +447,28 @@ function mapTransaction(
 
   const transactionProducts =
     Array.isArray(row.products)
-      ? row.products.filter(
-          (
-            item
-          ): item is {
-            name: string;
-            price: number;
-          } =>
-            typeof item === 'object' &&
-            item !== null &&
-            typeof (
-              item as {
-                name?: unknown;
-              }
-            ).name === 'string'
-        ).map((item) => ({
-          name: item.name,
-          price: Number(
-            item.price ?? 0
-          ),
-        }))
+      ? row.products
+          .filter(
+            (
+              item
+            ): item is {
+              name: string;
+              price: number;
+            } =>
+              typeof item === 'object' &&
+              item !== null &&
+              typeof (
+                item as {
+                  name?: unknown;
+                }
+              ).name === 'string'
+          )
+          .map((item) => ({
+            name: item.name,
+            price: Number(
+              item.price ?? 0
+            ),
+          }))
       : [];
 
   return {
@@ -958,7 +961,7 @@ export function AppProvider({
     );
 
   /* ============================================================
-     ORGANIZATION
+     GET ORGANIZATION
   ============================================================ */
 
   const getCurrentOrganizationId =
@@ -1075,11 +1078,51 @@ export function AppProvider({
           true;
 
         try {
+          /*
+           * First make absolutely sure that the Supabase
+           * session still exists.
+           */
+          const {
+            data: {
+              session,
+            },
+            error: sessionError,
+          } =
+            await supabase.auth.getSession();
+
+          if (
+            sessionError ||
+            !session
+          ) {
+            console.warn(
+              'No active Supabase session.'
+            );
+
+            setAuthed(false);
+            clearData();
+
+            return;
+          }
+
           const organizationId =
             await getCurrentOrganizationId();
 
+          /*
+           * IMPORTANT:
+           *
+           * Do NOT wipe the application state here.
+           *
+           * During signup/auth initialization the membership
+           * row can take a moment to become available.
+           *
+           * Clearing everything at this point caused the UI
+           * to appear empty after refresh.
+           */
           if (!organizationId) {
-            clearData();
+            console.warn(
+              'Organization not available yet.'
+            );
+
             return;
           }
 
@@ -1200,106 +1243,60 @@ export function AppProvider({
                 .maybeSingle(),
             ]);
 
-          if (agentsRes.error) {
+          /* ==================================================
+             ONLY REPLACE A COLLECTION IF ITS REQUEST SUCCEEDED
+          ================================================== */
+
+          if (!agentsRes.error) {
+            const rows =
+              (agentsRes.data ??
+                []) as Record<
+                string,
+                unknown
+              >[];
+
+            setAgents(
+              rows.map(mapAgent)
+            );
+          } else {
             console.error(
               'Agents:',
               agentsRes.error
             );
           }
 
-          if (productsRes.error) {
+          if (!productsRes.error) {
+            const rows =
+              (productsRes.data ??
+                []) as Record<
+                string,
+                unknown
+              >[];
+
+            setProducts(
+              rows.map(mapProduct)
+            );
+          } else {
             console.error(
               'Products:',
               productsRes.error
             );
           }
 
-          if (tabsRes.error) {
-            console.error(
-              'OpenTabs:',
-              tabsRes.error
-            );
-          }
-
-          if (txnsRes.error) {
-            console.error(
-              'Transactions:',
-              txnsRes.error
-            );
-          }
-
-          if (ledgerRes.error) {
-            console.error(
-              'Ledger:',
-              ledgerRes.error
-            );
-          }
-
-          if (oppsRes.error) {
-            console.error(
-              'Opportunities:',
-              oppsRes.error
-            );
-          }
-
-          if (policiesRes.error) {
-            console.error(
-              'Policies:',
-              policiesRes.error
-            );
-          }
-
-          if (orgRes.error) {
-            console.error(
-              'Organization:',
-              orgRes.error
-            );
-          }
-
-          /* ----------------------------------------------------
-             AGENTS
-          ---------------------------------------------------- */
-
-          const agentRows =
-            (agentsRes.data ??
-              []) as Record<
-              string,
-              unknown
-            >[];
-
-          const mappedAgents =
-            agentRows.map(
-              mapAgent
-            );
-
-          setAgents(
-            mappedAgents
-          );
-
-          /* ----------------------------------------------------
-             PRODUCTS
-          ---------------------------------------------------- */
-
-          const productRows =
-            (productsRes.data ??
-              []) as Record<
-              string,
-              unknown
-            >[];
-
-          setProducts(
-            productRows.map(
-              mapProduct
-            )
-          );
-
-          /* ----------------------------------------------------
-             AGENT MAP
-          ---------------------------------------------------- */
+          const currentAgents =
+            !agentsRes.error
+              ? (
+                  (agentsRes.data ??
+                    []) as Record<
+                    string,
+                    unknown
+                  >[]
+                ).map(mapAgent)
+              : agents;
 
           const agentMap =
             new Map(
-              mappedAgents.map(
+              currentAgents.map(
                 (agent) => [
                   agent.id,
                   agent,
@@ -1307,128 +1304,144 @@ export function AppProvider({
               )
             );
 
-          /* ----------------------------------------------------
-             OPEN TABS
-          ---------------------------------------------------- */
+          if (!tabsRes.error) {
+            const rows =
+              (tabsRes.data ??
+                []) as Record<
+                string,
+                unknown
+              >[];
 
-          const tabRows =
-            (tabsRes.data ??
-              []) as Record<
-              string,
-              unknown
-            >[];
+            setOpenTabs(
+              rows.map(
+                (row) => {
+                  const agent =
+                    agentMap.get(
+                      String(
+                        row.agent_id ??
+                          ''
+                      )
+                    );
 
-          setOpenTabs(
-            tabRows.map(
-              (row) => {
-                const agent =
-                  agentMap.get(
-                    String(
-                      row.agent_id ??
-                        ''
-                    )
+                  return mapOpenTab(
+                    row,
+                    agent?.name ??
+                      'Unknown',
+                    agent?.trustLevel ??
+                      'unknown'
                   );
+                }
+              )
+            );
+          } else {
+            console.error(
+              'OpenTabs:',
+              tabsRes.error
+            );
+          }
 
-                return mapOpenTab(
-                  row,
-                  agent?.name ??
-                    'Unknown',
-                  agent?.trustLevel ??
-                    'unknown'
-                );
-              }
-            )
-          );
+          if (!txnsRes.error) {
+            const rows =
+              (txnsRes.data ??
+                []) as Record<
+                string,
+                unknown
+              >[];
 
-          /* ----------------------------------------------------
-             TRANSACTIONS
-          ---------------------------------------------------- */
+            setTransactions(
+              rows.map(
+                (row) => {
+                  const agent =
+                    agentMap.get(
+                      String(
+                        row.agent_id ??
+                          ''
+                      )
+                    );
 
-          const txnRows =
-            (txnsRes.data ??
-              []) as Record<
-              string,
-              unknown
-            >[];
-
-          setTransactions(
-            txnRows.map(
-              (row) => {
-                const agent =
-                  agentMap.get(
-                    String(
-                      row.agent_id ??
-                        ''
-                    )
+                  return mapTransaction(
+                    row,
+                    agent?.name ??
+                      'Unknown',
+                    agent?.trustLevel ??
+                      'unknown'
                   );
+                }
+              )
+            );
+          } else {
+            console.error(
+              'Transactions:',
+              txnsRes.error
+            );
+          }
 
-                return mapTransaction(
-                  row,
-                  agent?.name ??
-                    'Unknown',
-                  agent?.trustLevel ??
-                    'unknown'
-                );
-              }
-            )
-          );
+          if (!ledgerRes.error) {
+            const rows =
+              (ledgerRes.data ??
+                []) as Record<
+                string,
+                unknown
+              >[];
 
-          /* ----------------------------------------------------
-             LEDGER
-          ---------------------------------------------------- */
+            setLedger(
+              rows.map(
+                mapLedger
+              )
+            );
+          } else {
+            console.error(
+              'Ledger:',
+              ledgerRes.error
+            );
+          }
 
-          const ledgerRows =
-            (ledgerRes.data ??
-              []) as Record<
-              string,
-              unknown
-            >[];
+          if (!oppsRes.error) {
+            const rows =
+              (oppsRes.data ??
+                []) as Record<
+                string,
+                unknown
+              >[];
 
-          setLedger(
-            ledgerRows.map(
-              mapLedger
-            )
-          );
+            setOpportunities(
+              rows.map(
+                mapOpportunity
+              )
+            );
+          } else {
+            console.error(
+              'Opportunities:',
+              oppsRes.error
+            );
+          }
 
-          /* ----------------------------------------------------
-             OPPORTUNITIES
-          ---------------------------------------------------- */
+          if (!policiesRes.error) {
+            const rows =
+              (policiesRes.data ??
+                []) as Record<
+                string,
+                unknown
+              >[];
 
-          const opportunityRows =
-            (oppsRes.data ??
-              []) as Record<
-              string,
-              unknown
-            >[];
+            setPolicies(
+              rows.map(
+                mapPolicy
+              )
+            );
+          } else {
+            console.error(
+              'Policies:',
+              policiesRes.error
+            );
+          }
 
-          setOpportunities(
-            opportunityRows.map(
-              mapOpportunity
-            )
-          );
-
-          /* ----------------------------------------------------
-             POLICIES
-          ---------------------------------------------------- */
-
-          const policyRows =
-            (policiesRes.data ??
-              []) as Record<
-              string,
-              unknown
-            >[];
-
-          setPolicies(
-            policyRows.map(
-              mapPolicy
-            )
-          );
-
-          /* ----------------------------------------------------
+          /* ==================================================
              ORGANIZATION
-          ---------------------------------------------------- */
+          ================================================== */
 
           if (
+            !orgRes.error &&
             orgRes.data
           ) {
             const org =
@@ -1437,41 +1450,71 @@ export function AppProvider({
                 unknown
               >;
 
+            /*
+             * IMPORTANT:
+             *
+             * onboarding_complete must come from the
+             * database. We no longer assume that an
+             * organization means onboarding is complete.
+             */
+            const onboardingComplete =
+              Boolean(
+                org.onboarding_complete
+              );
+
             setMerchant(
               (previous) => ({
                 ...previous,
 
                 businessName:
-                  String(
-                    org.name ??
-                      previous.businessName ??
-                      ''
-                  ),
+                  org.name !==
+                  null &&
+                  org.name !==
+                    undefined
+                    ? String(
+                        org.name
+                      )
+                    : previous.businessName,
 
                 industry:
-                  String(
-                    org.industry ??
-                      previous.industry ??
-                      ''
-                  ),
+                  org.industry !==
+                  null &&
+                  org.industry !==
+                    undefined
+                    ? String(
+                        org.industry
+                      )
+                    : previous.industry,
 
                 storeUrl:
-                  String(
-                    org.store_url ??
-                      previous.storeUrl ??
-                      ''
-                  ),
+                  org.store_url !==
+                  null &&
+                  org.store_url !==
+                    undefined
+                    ? String(
+                        org.store_url
+                      )
+                    : previous.storeUrl,
 
                 contactEmail:
-                  String(
-                    org.contact_email ??
-                      previous.contactEmail ??
-                      ''
-                  ),
+                  org.contact_email !==
+                  null &&
+                  org.contact_email !==
+                    undefined
+                    ? String(
+                        org.contact_email
+                      )
+                    : previous.contactEmail,
 
-                onboardingComplete:
-                  true,
+                onboardingComplete,
               })
+            );
+          } else if (
+            orgRes.error
+          ) {
+            console.error(
+              'Organization:',
+              orgRes.error
             );
           }
         } catch (error) {
@@ -1479,6 +1522,12 @@ export function AppProvider({
             'refreshData error:',
             error
           );
+
+          /*
+           * IMPORTANT:
+           * Never clear the already loaded data because
+           * a refresh request failed temporarily.
+           */
         } finally {
           refreshInProgress.current =
             false;
@@ -1487,12 +1536,13 @@ export function AppProvider({
       [
         getCurrentOrganizationId,
         clearData,
+        agents,
       ]
     );
 
   /* ============================================================
      AUTH INITIALIZATION
-  ============================================================ */
+============================================================ */
 
   useEffect(() => {
     let mounted = true;
@@ -1529,6 +1579,22 @@ export function AppProvider({
 
             organizationIdRef.current =
               null;
+
+            /*
+             * Give Supabase auth state a moment to settle,
+             * especially immediately after signup.
+             */
+            await new Promise(
+              (resolve) =>
+                window.setTimeout(
+                  resolve,
+                  100
+                )
+            );
+
+            if (!mounted) {
+              return;
+            }
 
             await refreshData();
           } else {
@@ -1578,14 +1644,19 @@ export function AppProvider({
             null;
 
           /*
-           * Do not perform Supabase calls directly
-           * inside onAuthStateChange.
+           * Never navigate from the auth listener.
+           *
+           * App.tsx decides whether the user belongs on
+           * /onboarding or /app.
            */
-          window.setTimeout(() => {
-            if (mounted) {
-              void refreshData();
-            }
-          }, 0);
+          window.setTimeout(
+            () => {
+              if (mounted) {
+                void refreshData();
+              }
+            },
+            300
+          );
         }
       );
 
@@ -1601,7 +1672,7 @@ export function AppProvider({
 
   /* ============================================================
      REALTIME
-  ============================================================ */
+============================================================ */
 
   useEffect(() => {
     if (!authed) {
@@ -1688,7 +1759,7 @@ export function AppProvider({
 
   /* ============================================================
      MERCHANT
-  ============================================================ */
+============================================================ */
 
   const updateMerchant =
     useCallback(
@@ -1707,7 +1778,7 @@ export function AppProvider({
 
   /* ============================================================
      POLICY
-  ============================================================ */
+============================================================ */
 
   const updatePolicy =
     useCallback(
@@ -1803,7 +1874,7 @@ export function AppProvider({
 
   /* ============================================================
      OPPORTUNITY
-  ============================================================ */
+============================================================ */
 
   const setOpportunityStatus =
     useCallback(
@@ -1878,7 +1949,7 @@ export function AppProvider({
 
   /* ============================================================
      AGENT STATUS
-  ============================================================ */
+============================================================ */
 
   const setAgentStatus =
     useCallback(
@@ -1951,7 +2022,7 @@ export function AppProvider({
 
   /* ============================================================
      LEDGER
-  ============================================================ */
+============================================================ */
 
   const addLedgerEvent =
     useCallback(
@@ -1975,11 +2046,8 @@ export function AppProvider({
     );
 
   /* ============================================================
-     EDGE FUNCTION HELPER
-     
-     The Supabase client handles the publishable key.
-     The authenticated session is sent automatically.
-  ============================================================ */
+     EDGE FUNCTION
+============================================================ */
 
   const invokeFunction =
     useCallback(
@@ -2038,7 +2106,7 @@ export function AppProvider({
 
   /* ============================================================
      CREATE OPEN TAB
-  ============================================================ */
+============================================================ */
 
   const createOpenTab =
     useCallback(
@@ -2163,7 +2231,7 @@ export function AppProvider({
 
   /* ============================================================
      PAUSE OPEN TAB
-  ============================================================ */
+============================================================ */
 
   const pauseOpenTab =
     useCallback(
@@ -2172,7 +2240,8 @@ export function AppProvider({
           await supabase
             .from('open_tabs')
             .update({
-              status: 'paused',
+              status:
+                'paused',
 
               paused_at:
                 new Date().toISOString(),
@@ -2221,7 +2290,7 @@ export function AppProvider({
 
   /* ============================================================
      REVOKE OPEN TAB
-  ============================================================ */
+============================================================ */
 
   const revokeOpenTab =
     useCallback(
@@ -2230,7 +2299,8 @@ export function AppProvider({
           await supabase
             .from('open_tabs')
             .update({
-              status: 'revoked',
+              status:
+                'revoked',
 
               remaining_amount:
                 0,
@@ -2284,7 +2354,7 @@ export function AppProvider({
 
   /* ============================================================
      TRANSACTIONS
-  ============================================================ */
+============================================================ */
 
   const addTransaction =
     useCallback(
@@ -2301,7 +2371,7 @@ export function AppProvider({
 
   /* ============================================================
      APPROVE TRANSACTION
-  ============================================================ */
+============================================================ */
 
   const approveEscalatedTransaction =
     useCallback(
@@ -2371,7 +2441,7 @@ export function AppProvider({
               'Approval failed',
             message:
               error instanceof
-                Error
+              Error
                 ? error.message
                 : 'Unexpected error.',
           });
@@ -2387,7 +2457,7 @@ export function AppProvider({
 
   /* ============================================================
      DECLINE TRANSACTION
-  ============================================================ */
+============================================================ */
 
   const declineEscalatedTransaction =
     useCallback(
@@ -2457,7 +2527,7 @@ export function AppProvider({
               'Decline failed',
             message:
               error instanceof
-                Error
+              Error
                 ? error.message
                 : 'Unexpected error.',
           });
@@ -2473,7 +2543,7 @@ export function AppProvider({
 
   /* ============================================================
      EVALUATE TRANSACTION
-  ============================================================ */
+============================================================ */
 
   const evaluateTransaction =
     useCallback(
@@ -2520,7 +2590,6 @@ export function AppProvider({
                 )
                 .join(', ')}`,
             },
-
             {
               id: 's2',
               label:
@@ -2528,7 +2597,6 @@ export function AppProvider({
               status:
                 'pending',
             },
-
             {
               id: 's3',
               label:
@@ -2536,7 +2604,6 @@ export function AppProvider({
               status:
                 'pending',
             },
-
             {
               id: 's4',
               label:
@@ -2544,7 +2611,6 @@ export function AppProvider({
               status:
                 'pending',
             },
-
             {
               id: 's5',
               label:
@@ -2552,7 +2618,6 @@ export function AppProvider({
               status:
                 'pending',
             },
-
             {
               id: 's6',
               label:
@@ -2560,7 +2625,6 @@ export function AppProvider({
               status:
                 'pending',
             },
-
             {
               id: 's7',
               label:
@@ -2833,7 +2897,7 @@ export function AppProvider({
 
             reason:
               error instanceof
-                Error
+              Error
                 ? error.message
                 : 'Unexpected transaction error.',
 
@@ -2852,7 +2916,7 @@ export function AppProvider({
 
   /* ============================================================
      SIGN OUT
-  ============================================================ */
+============================================================ */
 
   const signOut =
     useCallback(
@@ -2881,7 +2945,7 @@ export function AppProvider({
               'Sign out failed',
             message:
               error instanceof
-                Error
+              Error
                 ? error.message
                 : 'Unable to sign out.',
           });
@@ -2897,7 +2961,7 @@ export function AppProvider({
 
   /* ============================================================
      CONTEXT VALUE
-  ============================================================ */
+============================================================ */
 
   const value: AppContextValue =
     {
@@ -2975,7 +3039,9 @@ export function AppProvider({
 
 export function useApp() {
   const context =
-    useContext(AppContext);
+    useContext(
+      AppContext
+    );
 
   if (!context) {
     throw new Error(
