@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, X, Send, TrendingUp, ShieldAlert, Bot } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Sparkles, Send } from 'lucide-react';
 import { Drawer } from '@/components/ui/Drawer';
-import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { useApp } from '@/lib/store';
 import { useNavigate } from 'react-router-dom';

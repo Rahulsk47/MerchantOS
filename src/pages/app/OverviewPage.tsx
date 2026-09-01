@@ -1,24 +1,22 @@
-import { motion } from 'framer-motion';
-import { TrendingUp, Bot, Percent, CreditCard, ArrowUpRight, ArrowRight, ShieldCheck, Package, Sparkles, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
+import { TrendingUp, Bot, Percent, CreditCard, ArrowUpRight, ArrowRight, ShieldCheck, Sparkles, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 import { PageHeader } from '@/components/app/AppLayout';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Counter } from '@/components/ui/Counter';
 import { Reveal } from '@/components/ui/Reveal';
 import { useApp } from '@/lib/store';
-import { formatINR, formatINRShort, timeAgo } from '@/lib/utils';
+import { formatINR, formatINRShort } from '@/lib/utils';
 import { revenueData } from '@/lib/mockData';
 import { useNavigate } from 'react-router-dom';
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, BarChart, Bar } from 'recharts';
 
 export default function OverviewPage() {
-  const { merchant, opportunities, openTabs, transactions, ledger, agents } = useApp();
+  const { merchant, opportunities, openTabs, ledger } = useApp();
   const navigate = useNavigate();
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const activeOpps = opportunities.filter((o) => o.status === 'new');
   const activeTabs = openTabs.filter((t) => t.status === 'active');
-  const verifiedAgents = agents.filter((a) => a.trustLevel === 'verified' && a.status === 'active');
 
   const metrics = [
     { label: 'Revenue Opportunities', value: activeOpps.length, suffix: '', icon: TrendingUp, tone: 'text-electric-400', sub: `${formatINR(activeOpps.reduce((s, o) => s + o.impact, 0))} estimated impact` },

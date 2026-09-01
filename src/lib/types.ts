@@ -13,6 +13,8 @@ export interface AgentIdentity {
   status: AgentStatus;
   lastActivity: string;
   avatarColor: string;
+  interactions?: number;
+  conversionRate?: number;
   activity: AgentActivityEvent[];
 }
 
@@ -100,6 +102,12 @@ export interface GrowthOpportunity {
   risk: 'low' | 'medium' | 'high';
   products: string[];
   status: 'new' | 'approved' | 'dismissed' | 'simulated';
+  detail?: {
+    currentPerformance?: string;
+    estimatedConversion?: string;
+    estimatedRevenue?: string;
+    discountImpact?: string;
+  };
 }
 
 export interface Policy {

@@ -179,6 +179,15 @@ export function Hero() {
                 <Button
                   size="lg"
                   variant="outline"
+                  className="border-electric-500/40 text-electric-300 hover:border-electric-500/70"
+                  onClick={() => navigate('/signin')}
+                >
+                  Sign In
+                </Button>
+
+                <Button
+                  size="lg"
+                  variant="outline"
                   onClick={() =>
                     document
                       .getElementById('shift')

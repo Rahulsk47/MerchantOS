@@ -7,10 +7,18 @@ interface DrawerProps {
   onClose: () => void;
   title?: string;
   subtitle?: string;
+  size?: 'sm' | 'md' | 'lg' | 'xl';
   children: ReactNode;
 }
 
-export function Drawer({ open, onClose, title, subtitle, children }: DrawerProps) {
+const sizeClasses: Record<string, string> = {
+  sm: 'max-w-sm',
+  md: 'max-w-md',
+  lg: 'max-w-lg',
+  xl: 'max-w-xl',
+};
+
+export function Drawer({ open, onClose, title, subtitle, size = 'md', children }: DrawerProps) {
   return (
     <AnimatePresence>
       {open && (
@@ -23,7 +31,7 @@ export function Drawer({ open, onClose, title, subtitle, children }: DrawerProps
             onClick={onClose}
           />
           <motion.aside
-            className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-md bg-ink-850 border-l border-ink-700/60 shadow-glow flex flex-col"
+            className={`fixed right-0 top-0 bottom-0 z-50 w-full ${sizeClasses[size] || 'max-w-md'} bg-ink-850 border-l border-ink-700/60 shadow-glow flex flex-col`}
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}

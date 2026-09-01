@@ -61,7 +61,21 @@ export default function SignInPage() {
       });
 
       if (error) {
-        setAuthError(error.message);
+        if (
+          error.message?.toLowerCase().includes('invalid login credentials') ||
+          error.status === 400 ||
+          error.code === 'invalid_credentials'
+        ) {
+          setAuthError(
+            'Invalid email or password. If you recently created this account, please check your inbox to confirm your email first, or use "Explore Interactive Demo" below.'
+          );
+        } else if (error.message?.toLowerCase().includes('email not confirmed')) {
+          setAuthError(
+            'Your email has not been confirmed yet. Please check your inbox for the Supabase confirmation email, or test the app using the "Explore Interactive Demo" button below.'
+          );
+        } else {
+          setAuthError(error.message);
+        }
         return;
       }
 

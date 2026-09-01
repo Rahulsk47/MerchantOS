@@ -26,7 +26,7 @@ export function PillarsSection() {
             tagline="Find the revenue you're leaving on the table."
             description="AI-powered revenue intelligence surfaces bundles, catalog improvements, and conversion insights. Useful today — even before AI agents become mainstream customers."
             points={['Revenue opportunities with estimated impact', 'Bundle and pricing recommendations', 'Conversion insights with confidence levels']}
-            onClick={() => navigate('/app/growth')}
+            onClick={() => navigate('/signup')}
           />
           <PillarCard
             index="02"
@@ -36,7 +36,7 @@ export function PillarsSection() {
             tagline="Make your business understandable to AI."
             description="MerchantOS structures products, availability, shipping, returns, and policies so AI systems can understand your business. A commerce translation layer — not a proprietary standard everyone must adopt."
             points={['AI Commerce Passport for your business', 'Adapts to evolving AI and commerce formats', 'AI Readiness checker for every product']}
-            onClick={() => navigate('/app/catalog')}
+            onClick={() => navigate('/signup')}
           />
           <PillarCard
             index="03"
@@ -46,7 +46,7 @@ export function PillarsSection() {
             tagline="Give AI agents a Tab, not a blank cheque."
             description="OpenTab gives AI agents scoped, capped, temporary, and revocable transaction authority. Every transaction passes deterministic checks. AI recommendations can never override merchant policies."
             points={['Scoped and capped authorization', 'Temporary and revocable at any time', 'Every transaction fully audited']}
-            onClick={() => navigate('/app/opentabs')}
+            onClick={() => navigate('/signup')}
           />
         </div>
 
@@ -65,8 +65,8 @@ export function PillarsSection() {
               <p className="text-sm text-ink-300 leading-relaxed flex-1">
                 Underneath all three pillars: Agent Identity, a deterministic Policy Engine, Commerce Protection, and the Trust Ledger. Know who is acting. Know why decisions are made.
               </p>
-              <button onClick={() => navigate('/app/ledger')} className="text-sm text-electric-400 hover:text-electric-300 font-medium flex items-center gap-1.5 shrink-0">
-                Explore Trust Ledger <ArrowRight className="w-4 h-4" />
+              <button onClick={() => navigate('/signup')} className="text-sm text-electric-400 hover:text-electric-300 font-medium flex items-center gap-1.5 shrink-0">
+                Get Started <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </div>

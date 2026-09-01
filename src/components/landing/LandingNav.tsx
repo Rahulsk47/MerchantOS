@@ -5,13 +5,11 @@ import { Menu, X } from 'lucide-react';
 
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/Button';
-import { useApp } from '@/lib/store';
 
 export function LandingNav() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const { authed } = useApp();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -34,14 +32,9 @@ export function LandingNav() {
     { label: 'About', href: '#about' },
   ];
 
-  const handleStartBuilding = () => {
+  const handleCreateAccount = () => {
     setMobileOpen(false);
-
-    if (authed) {
-      navigate('/app');
-    } else {
-      navigate('/signup');
-    }
+    navigate('/signup');
   };
 
   const handleSignIn = () => {
@@ -96,9 +89,9 @@ export function LandingNav() {
             <Button
               variant="primary"
               size="sm"
-              onClick={handleStartBuilding}
+              onClick={handleCreateAccount}
             >
-              {authed ? 'Open Dashboard' : 'Create Account'}
+              Create Account
             </Button>
           </div>
 
@@ -147,24 +140,26 @@ export function LandingNav() {
                   </a>
                 ))}
 
-                <div className="flex gap-3 pt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={handleSignIn}
-                  >
-                    Sign In
-                  </Button>
+                <div className="flex flex-col gap-2 pt-2">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="flex-1"
+                      onClick={handleSignIn}
+                    >
+                      Sign In
+                    </Button>
 
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    className="flex-1"
-                    onClick={handleStartBuilding}
-                  >
-                    {authed ? 'Dashboard' : 'Create Account'}
-                  </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      className="flex-1"
+                      onClick={handleCreateAccount}
+                    >
+                      Create Account
+                    </Button>
+                  </div>
                 </div>
               </div>
             </motion.div>

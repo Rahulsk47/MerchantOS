@@ -37,6 +37,8 @@ export const demoAgents: AgentIdentity[] = [
     status: 'active',
     lastActivity: '2 minutes ago',
     avatarColor: 'from-electric-500 to-accent-500',
+    interactions: 248,
+    conversionRate: 34.2,
     activity: [
       { time: '10:05 AM', action: 'Transaction approved', detail: 'AeroBook Pro — ₹1,12,000' },
       { time: '10:03 AM', action: 'Policy check passed', detail: 'Within scope and authorization' },
@@ -55,6 +57,8 @@ export const demoAgents: AgentIdentity[] = [
     status: 'active',
     lastActivity: '18 minutes ago',
     avatarColor: 'from-success-500 to-accent-500',
+    interactions: 164,
+    conversionRate: 28.5,
     activity: [
       { time: '09:51 AM', action: 'Transaction approved', detail: 'Desk Lamp — ₹2,400' },
       { time: '09:50 AM', action: 'Product compared', detail: 'Office accessories (3 items)' },
@@ -72,6 +76,8 @@ export const demoAgents: AgentIdentity[] = [
     status: 'active',
     lastActivity: '1 hour ago',
     avatarColor: 'from-warning-500 to-danger-500',
+    interactions: 52,
+    conversionRate: 0.0,
     activity: [
       { time: '09:12 AM', action: 'Public catalog viewed', detail: 'Gaming headset query' },
       { time: '09:10 AM', action: 'Restricted', detail: 'No transaction authority — public info only' },
@@ -88,6 +94,8 @@ export const demoAgents: AgentIdentity[] = [
     status: 'paused',
     lastActivity: '3 hours ago',
     avatarColor: 'from-warning-500 to-electric-500',
+    interactions: 89,
+    conversionRate: 14.6,
     activity: [
       { time: '07:30 AM', action: 'Paused by merchant', detail: 'Unusual request volume detected' },
       { time: '07:15 AM', action: 'Rate limit triggered', detail: '12 requests in 60 seconds' },
@@ -339,13 +347,19 @@ export const demoOpportunities: GrowthOpportunity[] = [
   {
     id: 'opp1',
     type: 'bundle',
-    title: 'Laptop Sleeve + Wireless Mouse',
+    title: 'Laptop Sleeve + Wireless Mouse Bundle',
     description: 'Customers who purchase the AeroBook Pro frequently purchase these accessories. Bundling them increases average order value.',
     impact: 18400,
     confidence: 'high',
     risk: 'low',
     products: ['AeroBook Pro', 'Laptop Sleeve', 'Wireless Mouse Pro'],
     status: 'new',
+    detail: {
+      currentPerformance: 'AeroBook Pro AOV ₹1,12,000 with 14% accessory attachment rate',
+      estimatedConversion: '+12.4% lift in cross-category attachment',
+      estimatedRevenue: '+₹18,400 / month across 42 projected buyers',
+      discountImpact: '8% bundle discount (well within 15% max limit)',
+    },
   },
   {
     id: 'opp2',
@@ -357,6 +371,12 @@ export const demoOpportunities: GrowthOpportunity[] = [
     risk: 'low',
     products: ['Laptop Sleeve'],
     status: 'new',
+    detail: {
+      currentPerformance: '52 AI catalog queries with 0 purchases due to missing shipping schema',
+      estimatedConversion: '+22% inquiry-to-cart conversion',
+      estimatedRevenue: '+₹6,200 / month in recovered sales',
+      discountImpact: 'No discount required — pure metadata completion',
+    },
   },
   {
     id: 'opp3',
@@ -368,6 +388,12 @@ export const demoOpportunities: GrowthOpportunity[] = [
     risk: 'medium',
     products: ['Mechanical Keyboard'],
     status: 'new',
+    detail: {
+      currentPerformance: 'Current margin at 9.4% (target min: 12%)',
+      estimatedConversion: '-1.8% price elasticity offset by +14% unit margin',
+      estimatedRevenue: '+₹4,100 / month net profit gain',
+      discountImpact: 'Price adjustment from ₹6,900 to ₹7,250',
+    },
   },
   {
     id: 'opp4',
@@ -379,6 +405,12 @@ export const demoOpportunities: GrowthOpportunity[] = [
     risk: 'low',
     products: ['USB-C Hub'],
     status: 'new',
+    detail: {
+      currentPerformance: '0 inventory; 22 AI agents redirected elsewhere last 14 days',
+      estimatedConversion: 'Immediate fulfillment for pending shopping agent requests',
+      estimatedRevenue: '+₹9,800 / month baseline demand',
+      discountImpact: 'Standard margin 18.2% preserved',
+    },
   },
 ];
 

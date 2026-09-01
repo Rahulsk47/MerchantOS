@@ -115,7 +115,11 @@ export default function SignUpPage() {
       });
 
       if (error) {
-        setAuthError(error.message);
+        if (error.message?.toLowerCase().includes('already registered')) {
+          setAuthError('An account with this email already exists. Please sign in instead.');
+        } else {
+          setAuthError(error.message);
+        }
         return;
       }
 

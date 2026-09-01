@@ -1,0 +1,8 @@
+{
+  "name": "MerchantOS",
+  "description": "Commerce built for humans and AI. The intelligence, trust, and authorization layer between AI agents and merchants.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

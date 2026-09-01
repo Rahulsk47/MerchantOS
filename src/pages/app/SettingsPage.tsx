@@ -1,13 +1,12 @@
 import { useState } from 'react';
-import { Building2, Globe, Mail, ShieldCheck, Save, Sliders, Wallet } from 'lucide-react';
+import { Building2, Globe, Mail, ShieldCheck, Save, Sliders } from 'lucide-react';
 import { PageHeader } from '@/components/app/AppLayout';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Input, Field, Select } from '@/components/ui/Input';
+import { Input, Select } from '@/components/ui/Input';
 import { Reveal } from '@/components/ui/Reveal';
 import { useApp } from '@/lib/store';
-import { formatINR } from '@/lib/utils';
 
 export default function SettingsPage() {
   const { merchant, updateMerchant, pushToast } = useApp();
