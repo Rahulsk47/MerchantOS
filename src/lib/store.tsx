@@ -1,17 +1,15 @@
 import {
   createContext,
-  useContext,
-  useState,
   useCallback,
+  useContext,
   useEffect,
   useRef,
+  useState,
   type ReactNode,
 } from 'react';
 
 import type {
-  SupabaseClient,
-  Session,
-  AuthChangeEvent,
+  RealtimeChannel,
 } from '@supabase/supabase-js';
 
 import type {
@@ -52,14 +50,18 @@ interface AppState {
 interface AppContextValue extends AppState {
   setAuthed: (value: boolean) => void;
 
-  updateMerchant: (patch: Partial<MerchantProfile>) => void;
+  updateMerchant: (
+    patch: Partial<MerchantProfile>
+  ) => void;
 
   updatePolicy: (
     id: string,
     patch: Partial<Policy>
   ) => void;
 
-  togglePolicy: (id: string) => Promise<void>;
+  togglePolicy: (
+    id: string
+  ) => Promise<void>;
 
   setOpportunityStatus: (
     id: string,
@@ -78,11 +80,17 @@ interface AppContextValue extends AppState {
     >
   ) => Promise<OpenTab>;
 
-  pauseOpenTab: (id: string) => Promise<void>;
+  pauseOpenTab: (
+    id: string
+  ) => Promise<void>;
 
-  revokeOpenTab: (id: string) => Promise<void>;
+  revokeOpenTab: (
+    id: string
+  ) => Promise<void>;
 
-  addTransaction: (txn: Transaction) => void;
+  addTransaction: (
+    txn: Transaction
+  ) => void;
 
   approveEscalatedTransaction: (
     id: string
@@ -92,9 +100,13 @@ interface AppContextValue extends AppState {
     id: string
   ) => Promise<void>;
 
-  pushToast: (toast: Omit<Toast, 'id'>) => void;
+  pushToast: (
+    toast: Omit<Toast, 'id'>
+  ) => void;
 
-  dismissToast: (id: string) => void;
+  dismissToast: (
+    id: string
+  ) => void;
 
   addLedgerEvent: (
     event: Omit<LedgerEvent, 'id'>
@@ -163,19 +175,39 @@ const avatarColors = [
    HELPERS
 ============================================================ */
 
-function timeAgoShort(iso: string): string {
+function timeAgoShort(
+  iso: string
+): string {
+  const timestamp =
+    new Date(iso).getTime();
+
+  if (Number.isNaN(timestamp)) {
+    return '—';
+  }
+
   const diff =
-    Date.now() - new Date(iso).getTime();
+    Math.max(
+      0,
+      Date.now() - timestamp
+    );
 
-  const mins = Math.floor(diff / 60000);
+  const mins =
+    Math.floor(diff / 60000);
 
-  if (mins < 1) return 'just now';
+  if (mins < 1) {
+    return 'just now';
+  }
 
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 60) {
+    return `${mins}m ago`;
+  }
 
-  const hrs = Math.floor(mins / 60);
+  const hrs =
+    Math.floor(mins / 60);
 
-  if (hrs < 24) return `${hrs}h ago`;
+  if (hrs < 24) {
+    return `${hrs}h ago`;
+  }
 
   return `${Math.floor(hrs / 24)}d ago`;
 }
@@ -189,7 +221,13 @@ function mapAgent(
   index: number
 ): AgentIdentity {
   const permissions =
-    (row.permissions as Record<string, unknown>) ?? {};
+    row.permissions &&
+    typeof row.permissions === 'object'
+      ? (row.permissions as Record<
+          string,
+          unknown
+        >)
+      : {};
 
   const permissionLevel =
     permissions.max_scope === 'full'
@@ -204,10 +242,19 @@ function mapAgent(
       : 'authenticated';
 
   return {
-    id: String(row.id),
-    name: String(row.agent_name ?? ''),
-    organization: String(row.provider_name ?? ''),
-    provider: String(row.agent_identifier ?? ''),
+    id: String(row.id ?? ''),
+
+    name: String(
+      row.agent_name ?? ''
+    ),
+
+    organization: String(
+      row.provider_name ?? ''
+    ),
+
+    provider: String(
+      row.agent_identifier ?? ''
+    ),
 
     trustLevel:
       row.trust_level as AgentIdentity['trustLevel'],
@@ -222,11 +269,15 @@ function mapAgent(
       row.status as AgentIdentity['status'],
 
     lastActivity: row.last_activity_at
-      ? timeAgoShort(String(row.last_activity_at))
+      ? timeAgoShort(
+          String(row.last_activity_at)
+        )
       : '—',
 
     avatarColor:
-      avatarColors[index % avatarColors.length],
+      avatarColors[
+        index % avatarColors.length
+      ],
 
     activity: [],
   };
@@ -240,11 +291,19 @@ function mapProduct(
   row: Record<string, unknown>
 ): Product {
   return {
-    id: String(row.id),
+    id: String(row.id ?? ''),
 
-    name: String(row.name ?? ''),
-    category: String(row.category ?? ''),
-    price: Number(row.price ?? 0),
+    name: String(
+      row.name ?? ''
+    ),
+
+    category: String(
+      row.category ?? ''
+    ),
+
+    price: Number(
+      row.price ?? 0
+    ),
 
     inventory: Number(
       row.inventory_quantity ?? 0
@@ -255,7 +314,8 @@ function mapProduct(
     ),
 
     aiReadiness:
-      row.ai_readiness_status === 'healthy'
+      row.ai_readiness_status ===
+      'healthy'
         ? 90
         : row.ai_readiness_status ===
             'needs_attention'
@@ -287,20 +347,29 @@ function mapOpenTab(
   agentName: string,
   trustLevel: string
 ): OpenTab {
-  return {
-    id: String(row.id),
+  const allowedCategories =
+    Array.isArray(
+      row.allowed_categories
+    )
+      ? row.allowed_categories.filter(
+          (item): item is string =>
+            typeof item === 'string'
+        )
+      : [];
 
-    agentId: String(row.agent_id ?? ''),
+  return {
+    id: String(row.id ?? ''),
+
+    agentId: String(
+      row.agent_id ?? ''
+    ),
 
     agentName,
 
     trustLevel:
       trustLevel as OpenTab['trustLevel'],
 
-    scope:
-      Array.isArray(row.allowed_categories)
-        ? (row.allowed_categories as string[])
-        : [],
+    scope: allowedCategories,
 
     cap: Number(
       row.authorization_cap ?? 0
@@ -317,10 +386,13 @@ function mapOpenTab(
     expiresAt: row.expires_at
       ? new Date(
           String(row.expires_at)
-        ).toLocaleString('en-IN', {
-          hour: 'numeric',
-          minute: '2-digit',
-        })
+        ).toLocaleString(
+          'en-IN',
+          {
+            hour: 'numeric',
+            minute: '2-digit',
+          }
+        )
       : '—',
 
     status:
@@ -329,10 +401,13 @@ function mapOpenTab(
     createdAt: row.created_at
       ? new Date(
           String(row.created_at)
-        ).toLocaleString('en-IN', {
-          hour: 'numeric',
-          minute: '2-digit',
-        })
+        ).toLocaleString(
+          'en-IN',
+          {
+            hour: 'numeric',
+            minute: '2-digit',
+          }
+        )
       : '—',
   };
 }
@@ -369,25 +444,47 @@ function mapTransaction(
             ? 'awaiting_approval'
             : 'pending';
 
-  return {
-    id: String(row.id),
+  const transactionProducts =
+    Array.isArray(row.products)
+      ? row.products.filter(
+          (
+            item
+          ): item is {
+            name: string;
+            price: number;
+          } =>
+            typeof item === 'object' &&
+            item !== null &&
+            typeof (
+              item as {
+                name?: unknown;
+              }
+            ).name === 'string'
+        ).map((item) => ({
+          name: item.name,
+          price: Number(
+            item.price ?? 0
+          ),
+        }))
+      : [];
 
-    agentId: String(row.agent_id ?? ''),
+  return {
+    id: String(row.id ?? ''),
+
+    agentId: String(
+      row.agent_id ?? ''
+    ),
 
     agentName,
 
     trustLevel:
       trustLevel as Transaction['trustLevel'],
 
-    products:
-      Array.isArray(row.products)
-        ? (row.products as {
-            name: string;
-            price: number;
-          }[])
-        : [],
+    products: transactionProducts,
 
-    amount: Number(row.amount ?? 0),
+    amount: Number(
+      row.amount ?? 0
+    ),
 
     openTabId: row.open_tab_id
       ? String(row.open_tab_id)
@@ -421,34 +518,53 @@ function mapLedger(
   );
 
   return {
-    id: String(row.id),
+    id: String(
+      row.id ?? ''
+    ),
 
     time: row.created_at
       ? new Date(
           String(row.created_at)
-        ).toLocaleTimeString('en-IN', {
-          hour: 'numeric',
-          minute: '2-digit',
-        })
+        ).toLocaleTimeString(
+          'en-IN',
+          {
+            hour: 'numeric',
+            minute: '2-digit',
+          }
+        )
       : '—',
 
-    what: eventTypeToLabel(eventType),
+    what:
+      eventTypeToLabel(
+        eventType
+      ),
 
-    why: String(row.reason ?? ''),
+    why: String(
+      row.reason ?? ''
+    ),
 
-    who: String(row.actor_id ?? ''),
+    who: String(
+      row.actor_id ?? ''
+    ),
 
     whoType:
       row.actor_type as LedgerEvent['whoType'],
 
-    transactionId: row.transaction_id
-      ? String(row.transaction_id)
-      : undefined,
+    transactionId:
+      row.transaction_id
+        ? String(
+            row.transaction_id
+          )
+        : undefined,
 
     decision:
-      eventType.includes('APPROVED')
+      eventType.includes(
+        'APPROVED'
+      )
         ? 'approved'
-        : eventType.includes('DECLINED')
+        : eventType.includes(
+              'DECLINED'
+            )
           ? 'declined'
           : undefined,
   };
@@ -462,17 +578,40 @@ function mapOpportunity(
   row: Record<string, unknown>
 ): GrowthOpportunity {
   const supportingData =
-    (row.supporting_data as Record<string, unknown>) ??
-    {};
+    row.supporting_data &&
+    typeof row.supporting_data ===
+      'object'
+      ? (row.supporting_data as Record<
+          string,
+          unknown
+        >)
+      : {};
+
+  const opportunityProducts =
+    Array.isArray(
+      supportingData.products
+    )
+      ? supportingData.products.filter(
+          (
+            item
+          ): item is string =>
+            typeof item === 'string'
+        )
+      : [];
 
   return {
-    id: String(row.id),
+    id: String(
+      row.id ?? ''
+    ),
 
     type: String(
-      row.opportunity_type ?? 'general'
+      row.opportunity_type ??
+        'general'
     ) as GrowthOpportunity['type'],
 
-    title: String(row.title ?? ''),
+    title: String(
+      row.title ?? ''
+    ),
 
     description: String(
       row.description ?? ''
@@ -485,17 +624,17 @@ function mapOpportunity(
     ),
 
     confidence: String(
-      row.confidence_level ?? 'medium'
+      row.confidence_level ??
+        'medium'
     ) as GrowthOpportunity['confidence'],
 
     risk: String(
-      row.risk_level ?? 'medium'
+      row.risk_level ??
+        'medium'
     ) as GrowthOpportunity['risk'],
 
     products:
-      Array.isArray(supportingData.products)
-        ? (supportingData.products as string[])
-        : [],
+      opportunityProducts,
 
     status: String(
       row.status ?? 'new'
@@ -511,49 +650,76 @@ function mapPolicy(
   row: Record<string, unknown>
 ): Policy {
   const rules =
-    (row.rules as Record<string, unknown>) ?? {};
+    row.rules &&
+    typeof row.rules === 'object'
+      ? (row.rules as Record<
+          string,
+          unknown
+        >)
+      : {};
 
   let value = '';
 
   if (
-    rules.max_discount_percent !== undefined
+    rules.max_discount_percent !==
+    undefined
   ) {
     value = `${rules.max_discount_percent}%`;
   } else if (
-    rules.min_margin_percent !== undefined
+    rules.min_margin_percent !==
+    undefined
   ) {
     value = `${rules.min_margin_percent}%`;
   } else if (
-    rules.max_txn_amount !== undefined
+    rules.max_txn_amount !==
+    undefined
   ) {
     value = `₹${Number(
       rules.max_txn_amount
     ).toLocaleString('en-IN')}`;
   } else if (
-    Array.isArray(rules.allowed_categories)
+    Array.isArray(
+      rules.allowed_categories
+    )
   ) {
     value =
-      (rules.allowed_categories as string[]).join(
-        ', '
-      );
+      rules.allowed_categories
+        .filter(
+          (
+            item
+          ): item is string =>
+            typeof item === 'string'
+        )
+        .join(', ');
   } else if (
-    rules.max_requests_per_min !== undefined
+    rules.max_requests_per_min !==
+    undefined
   ) {
     value = `${rules.max_requests_per_min} / min`;
   } else if (
-    Array.isArray(rules.allowed_trust_levels)
+    Array.isArray(
+      rules.allowed_trust_levels
+    )
   ) {
-    value = (
-      rules.allowed_trust_levels as string[]
-    ).join(' + ');
+    value =
+      rules.allowed_trust_levels
+        .filter(
+          (
+            item
+          ): item is string =>
+            typeof item === 'string'
+        )
+        .join(' + ');
   } else if (
-    rules.auto_approve_ceiling !== undefined
+    rules.auto_approve_ceiling !==
+    undefined
   ) {
     value = `₹${Number(
       rules.auto_approve_ceiling
     ).toLocaleString('en-IN')}`;
   } else if (
-    rules.human_approval_threshold !== undefined
+    rules.human_approval_threshold !==
+    undefined
   ) {
     value = `₹${Number(
       rules.human_approval_threshold
@@ -561,14 +727,17 @@ function mapPolicy(
   }
 
   return {
-    id: String(row.id),
+    id: String(
+      row.id ?? ''
+    ),
 
-    category:
-      String(
-        row.policy_type ?? ''
-      ) as Policy['category'],
+    category: String(
+      row.policy_type ?? ''
+    ) as Policy['category'],
 
-    name: String(row.name ?? ''),
+    name: String(
+      row.name ?? ''
+    ),
 
     description: String(
       row.description ?? ''
@@ -576,7 +745,8 @@ function mapPolicy(
 
     value,
 
-    enabled: Boolean(row.enabled),
+    enabled:
+      Boolean(row.enabled),
   };
 }
 
@@ -587,7 +757,10 @@ function mapPolicy(
 function eventTypeToLabel(
   eventType: string
 ): string {
-  const labels: Record<string, string> = {
+  const labels: Record<
+    string,
+    string
+  > = {
     PAYMENT_CONFIRMED:
       'Payment confirmed',
 
@@ -631,7 +804,10 @@ function eventTypeToLabel(
       'Identity validated',
   };
 
-  return labels[eventType] ?? eventType;
+  return (
+    labels[eventType] ??
+    eventType
+  );
 }
 
 /* ============================================================
@@ -643,514 +819,753 @@ export function AppProvider({
 }: {
   children: ReactNode;
 }) {
-  const [merchant, setMerchant] =
+  const [
+    merchant,
+    setMerchant,
+  ] =
     useState<MerchantProfile>(
       fallbackMerchant
     );
 
-  const [agents, setAgents] =
-    useState<AgentIdentity[]>([]);
+  const [
+    agents,
+    setAgents,
+  ] = useState<AgentIdentity[]>(
+    []
+  );
 
-  const [products, setProducts] =
-    useState<Product[]>([]);
+  const [
+    products,
+    setProducts,
+  ] = useState<Product[]>(
+    []
+  );
 
-  const [openTabs, setOpenTabs] =
-    useState<OpenTab[]>([]);
+  const [
+    openTabs,
+    setOpenTabs,
+  ] = useState<OpenTab[]>(
+    []
+  );
 
-  const [transactions, setTransactions] =
-    useState<Transaction[]>([]);
+  const [
+    transactions,
+    setTransactions,
+  ] = useState<Transaction[]>(
+    []
+  );
 
-  const [ledger, setLedger] =
-    useState<LedgerEvent[]>([]);
+  const [
+    ledger,
+    setLedger,
+  ] = useState<LedgerEvent[]>(
+    []
+  );
 
-  const [opportunities, setOpportunities] =
-    useState<GrowthOpportunity[]>([]);
+  const [
+    opportunities,
+    setOpportunities,
+  ] =
+    useState<GrowthOpportunity[]>(
+      []
+    );
 
-  const [policies, setPolicies] =
-    useState<Policy[]>([]);
+  const [
+    policies,
+    setPolicies,
+  ] = useState<Policy[]>(
+    []
+  );
 
-  const [toasts, setToasts] =
-    useState<Toast[]>([]);
+  const [
+    toasts,
+    setToasts,
+  ] = useState<Toast[]>(
+    []
+  );
 
-  const [authed, setAuthed] =
-    useState(false);
+  const [
+    authed,
+    setAuthed,
+  ] = useState(false);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
 
   const organizationIdRef =
-    useRef<string | null>(null);
+    useRef<string | null>(
+      null
+    );
 
   const realtimeChannels =
-    useRef<
-      ReturnType<SupabaseClient['channel']>[]
-    >([]);
+    useRef<RealtimeChannel[]>(
+      []
+    );
+
+  const refreshInProgress =
+    useRef(false);
 
   /* ============================================================
      TOASTS
   ============================================================ */
 
   const pushToast = useCallback(
-    (toast: Omit<Toast, 'id'>) => {
+    (
+      toast: Omit<Toast, 'id'>
+    ) => {
       const id = uid('toast');
 
-      setToasts((previous) => [
-        ...previous,
-        {
-          ...toast,
-          id,
+      setToasts(
+        (previous) => [
+          ...previous,
+          {
+            ...toast,
+            id,
+          },
+        ]
+      );
+
+      window.setTimeout(
+        () => {
+          setToasts(
+            (previous) =>
+              previous.filter(
+                (item) =>
+                  item.id !== id
+              )
+          );
         },
-      ]);
-
-      window.setTimeout(() => {
-        setToasts((previous) =>
-          previous.filter(
-            (item) => item.id !== id
-          )
-        );
-      }, toast.duration ?? 4000);
-    },
-    []
-  );
-
-  const dismissToast = useCallback(
-    (id: string) => {
-      setToasts((previous) =>
-        previous.filter(
-          (item) => item.id !== id
-        )
+        toast.duration ?? 4000
       );
     },
     []
   );
+
+  const dismissToast =
+    useCallback(
+      (id: string) => {
+        setToasts(
+          (previous) =>
+            previous.filter(
+              (item) =>
+                item.id !== id
+            )
+        );
+      },
+      []
+    );
 
   /* ============================================================
      ORGANIZATION
   ============================================================ */
 
   const getCurrentOrganizationId =
-    useCallback(async (): Promise<string | null> => {
-      if (organizationIdRef.current) {
+    useCallback(
+      async (): Promise<
+        string | null
+      > => {
+        if (
+          organizationIdRef.current
+        ) {
+          return organizationIdRef.current;
+        }
+
+        const {
+          data: {
+            user,
+          },
+          error: userError,
+        } =
+          await supabase.auth.getUser();
+
+        if (
+          userError ||
+          !user
+        ) {
+          return null;
+        }
+
+        const {
+          data: membership,
+          error,
+        } =
+          await supabase
+            .from(
+              'organization_members'
+            )
+            .select(
+              'organization_id'
+            )
+            .eq(
+              'user_id',
+              user.id
+            )
+            .order(
+              'created_at',
+              {
+                ascending: true,
+              }
+            )
+            .limit(1)
+            .maybeSingle();
+
+        if (error) {
+          console.error(
+            'Organization lookup failed:',
+            error
+          );
+
+          return null;
+        }
+
+        if (
+          !membership?.organization_id
+        ) {
+          return null;
+        }
+
+        organizationIdRef.current =
+          String(
+            membership.organization_id
+          );
+
         return organizationIdRef.current;
-      }
-
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        return null;
-      }
-
-      const {
-        data: membership,
-        error,
-      } = await supabase
-        .from('organization_members')
-        .select('organization_id')
-        .eq('user_id', user.id)
-        .order('created_at', {
-          ascending: true,
-        })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) {
-        console.error(
-          'Organization lookup failed:',
-          error
-        );
-
-        return null;
-      }
-
-      if (!membership?.organization_id) {
-        return null;
-      }
-
-      organizationIdRef.current =
-        String(
-          membership.organization_id
-        );
-
-      return organizationIdRef.current;
-    }, []);
+      },
+      []
+    );
 
   /* ============================================================
      CLEAR DATA
   ============================================================ */
 
-  const clearData = useCallback(() => {
-    organizationIdRef.current = null;
+  const clearData =
+    useCallback(() => {
+      organizationIdRef.current =
+        null;
 
-    setMerchant(fallbackMerchant);
-    setAgents([]);
-    setProducts([]);
-    setOpenTabs([]);
-    setTransactions([]);
-    setLedger([]);
-    setOpportunities([]);
-    setPolicies([]);
-  }, []);
+      setMerchant(
+        fallbackMerchant
+      );
+
+      setAgents([]);
+      setProducts([]);
+      setOpenTabs([]);
+      setTransactions([]);
+      setLedger([]);
+      setOpportunities([]);
+      setPolicies([]);
+    }, []);
 
   /* ============================================================
      REFRESH DATA
   ============================================================ */
 
-  const refreshData = useCallback(
-    async () => {
-      const organizationId =
-        await getCurrentOrganizationId();
+  const refreshData =
+    useCallback(
+      async () => {
+        if (
+          refreshInProgress.current
+        ) {
+          return;
+        }
 
-      if (!organizationId) {
-        clearData();
-        return;
-      }
+        refreshInProgress.current =
+          true;
 
-      try {
-        const [
-          agentsRes,
-          productsRes,
-          tabsRes,
-          txnsRes,
-          ledgerRes,
-          oppsRes,
-          policiesRes,
-          orgRes,
-        ] = await Promise.all([
-          supabase
-            .from('agents')
-            .select('*')
-            .eq(
-              'organization_id',
-              organizationId
-            )
-            .order('created_at'),
+        try {
+          const organizationId =
+            await getCurrentOrganizationId();
 
-          supabase
-            .from('products')
-            .select('*')
-            .eq(
-              'organization_id',
-              organizationId
-            )
-            .order('created_at'),
+          if (!organizationId) {
+            clearData();
+            return;
+          }
 
-          supabase
-            .from('open_tabs')
-            .select('*')
-            .eq(
-              'organization_id',
-              organizationId
-            )
-            .order('created_at', {
-              ascending: false,
-            }),
-
-          supabase
-            .from('transactions')
-            .select('*')
-            .eq(
-              'organization_id',
-              organizationId
-            )
-            .order('created_at', {
-              ascending: false,
-            }),
-
-          supabase
-            .from('trust_ledger_events')
-            .select('*')
-            .eq(
-              'organization_id',
-              organizationId
-            )
-            .order('created_at', {
-              ascending: false,
-            })
-            .limit(50),
-
-          supabase
-            .from('revenue_opportunities')
-            .select('*')
-            .eq(
-              'organization_id',
-              organizationId
-            )
-            .order('created_at'),
-
-          supabase
-            .from('policies')
-            .select('*')
-            .eq(
-              'organization_id',
-              organizationId
-            )
-            .order('priority'),
-
-          supabase
-            .from('organizations')
-            .select('*')
-            .eq(
-              'id',
-              organizationId
-            )
-            .maybeSingle(),
-        ]);
-
-        if (agentsRes.error)
-          console.error(
-            'Agents:',
-            agentsRes.error
-          );
-
-        if (productsRes.error)
-          console.error(
-            'Products:',
-            productsRes.error
-          );
-
-        if (tabsRes.error)
-          console.error(
-            'OpenTabs:',
-            tabsRes.error
-          );
-
-        if (txnsRes.error)
-          console.error(
-            'Transactions:',
-            txnsRes.error
-          );
-
-        if (ledgerRes.error)
-          console.error(
-            'Ledger:',
-            ledgerRes.error
-          );
-
-        if (oppsRes.error)
-          console.error(
-            'Opportunities:',
-            oppsRes.error
-          );
-
-        if (policiesRes.error)
-          console.error(
-            'Policies:',
-            policiesRes.error
-          );
-
-        if (orgRes.error)
-          console.error(
-            'Organization:',
-            orgRes.error
-          );
-
-        const agentRows =
-          (agentsRes.data ?? []) as Record<
-            string,
-            unknown
-          >[];
-
-        const mappedAgents =
-          agentRows.map(mapAgent);
-
-        setAgents(mappedAgents);
-
-        const productRows =
-          (productsRes.data ?? []) as Record<
-            string,
-            unknown
-          >[];
-
-        setProducts(
-          productRows.map(mapProduct)
-        );
-
-        const agentMap = new Map(
-          mappedAgents.map((agent) => [
-            agent.id,
-            agent,
-          ])
-        );
-
-        const tabRows =
-          (tabsRes.data ?? []) as Record<
-            string,
-            unknown
-          >[];
-
-        setOpenTabs(
-          tabRows.map((row) => {
-            const agent =
-              agentMap.get(
-                String(
-                  row.agent_id ?? ''
+          const [
+            agentsRes,
+            productsRes,
+            tabsRes,
+            txnsRes,
+            ledgerRes,
+            oppsRes,
+            policiesRes,
+            orgRes,
+          ] =
+            await Promise.all([
+              supabase
+                .from('agents')
+                .select('*')
+                .eq(
+                  'organization_id',
+                  organizationId
                 )
-              );
+                .order(
+                  'created_at'
+                ),
 
-            return mapOpenTab(
-              row,
-              agent?.name ?? 'Unknown',
-              agent?.trustLevel ?? 'unknown'
-            );
-          })
-        );
-
-        const txnRows =
-          (txnsRes.data ?? []) as Record<
-            string,
-            unknown
-          >[];
-
-        setTransactions(
-          txnRows.map((row) => {
-            const agent =
-              agentMap.get(
-                String(
-                  row.agent_id ?? ''
+              supabase
+                .from('products')
+                .select('*')
+                .eq(
+                  'organization_id',
+                  organizationId
                 )
-              );
+                .order(
+                  'created_at'
+                ),
 
-            return mapTransaction(
-              row,
-              agent?.name ?? 'Unknown',
-              agent?.trustLevel ?? 'unknown'
+              supabase
+                .from('open_tabs')
+                .select('*')
+                .eq(
+                  'organization_id',
+                  organizationId
+                )
+                .order(
+                  'created_at',
+                  {
+                    ascending:
+                      false,
+                  }
+                ),
+
+              supabase
+                .from('transactions')
+                .select('*')
+                .eq(
+                  'organization_id',
+                  organizationId
+                )
+                .order(
+                  'created_at',
+                  {
+                    ascending:
+                      false,
+                  }
+                ),
+
+              supabase
+                .from(
+                  'trust_ledger_events'
+                )
+                .select('*')
+                .eq(
+                  'organization_id',
+                  organizationId
+                )
+                .order(
+                  'created_at',
+                  {
+                    ascending:
+                      false,
+                  }
+                )
+                .limit(50),
+
+              supabase
+                .from(
+                  'revenue_opportunities'
+                )
+                .select('*')
+                .eq(
+                  'organization_id',
+                  organizationId
+                )
+                .order(
+                  'created_at'
+                ),
+
+              supabase
+                .from('policies')
+                .select('*')
+                .eq(
+                  'organization_id',
+                  organizationId
+                )
+                .order(
+                  'priority'
+                ),
+
+              supabase
+                .from(
+                  'organizations'
+                )
+                .select('*')
+                .eq(
+                  'id',
+                  organizationId
+                )
+                .maybeSingle(),
+            ]);
+
+          if (agentsRes.error) {
+            console.error(
+              'Agents:',
+              agentsRes.error
             );
-          })
-        );
+          }
 
-        const ledgerRows =
-          (ledgerRes.data ?? []) as Record<
-            string,
-            unknown
-          >[];
+          if (productsRes.error) {
+            console.error(
+              'Products:',
+              productsRes.error
+            );
+          }
 
-        setLedger(
-          ledgerRows.map(mapLedger)
-        );
+          if (tabsRes.error) {
+            console.error(
+              'OpenTabs:',
+              tabsRes.error
+            );
+          }
 
-        const opportunityRows =
-          (oppsRes.data ?? []) as Record<
-            string,
-            unknown
-          >[];
+          if (txnsRes.error) {
+            console.error(
+              'Transactions:',
+              txnsRes.error
+            );
+          }
 
-        setOpportunities(
-          opportunityRows.map(
-            mapOpportunity
-          )
-        );
+          if (ledgerRes.error) {
+            console.error(
+              'Ledger:',
+              ledgerRes.error
+            );
+          }
 
-        const policyRows =
-          (policiesRes.data ?? []) as Record<
-            string,
-            unknown
-          >[];
+          if (oppsRes.error) {
+            console.error(
+              'Opportunities:',
+              oppsRes.error
+            );
+          }
 
-        setPolicies(
-          policyRows.map(mapPolicy)
-        );
+          if (policiesRes.error) {
+            console.error(
+              'Policies:',
+              policiesRes.error
+            );
+          }
 
-        if (orgRes.data) {
-          const org =
-            orgRes.data as Record<
+          if (orgRes.error) {
+            console.error(
+              'Organization:',
+              orgRes.error
+            );
+          }
+
+          /* ----------------------------------------------------
+             AGENTS
+          ---------------------------------------------------- */
+
+          const agentRows =
+            (agentsRes.data ??
+              []) as Record<
               string,
               unknown
-            >;
+            >[];
 
-          setMerchant((previous) => ({
-            ...previous,
+          const mappedAgents =
+            agentRows.map(
+              mapAgent
+            );
 
-            businessName: String(
-              org.name ??
-                previous.businessName ??
-                ''
-            ),
+          setAgents(
+            mappedAgents
+          );
 
-            industry: String(
-              org.industry ??
-                previous.industry ??
-                ''
-            ),
+          /* ----------------------------------------------------
+             PRODUCTS
+          ---------------------------------------------------- */
 
-            storeUrl: String(
-              org.store_url ??
-                previous.storeUrl ??
-                ''
-            ),
+          const productRows =
+            (productsRes.data ??
+              []) as Record<
+              string,
+              unknown
+            >[];
 
-            contactEmail: String(
-              org.contact_email ??
-                previous.contactEmail ??
-                ''
-            ),
+          setProducts(
+            productRows.map(
+              mapProduct
+            )
+          );
 
-            onboardingComplete: true,
-          }));
+          /* ----------------------------------------------------
+             AGENT MAP
+          ---------------------------------------------------- */
+
+          const agentMap =
+            new Map(
+              mappedAgents.map(
+                (agent) => [
+                  agent.id,
+                  agent,
+                ]
+              )
+            );
+
+          /* ----------------------------------------------------
+             OPEN TABS
+          ---------------------------------------------------- */
+
+          const tabRows =
+            (tabsRes.data ??
+              []) as Record<
+              string,
+              unknown
+            >[];
+
+          setOpenTabs(
+            tabRows.map(
+              (row) => {
+                const agent =
+                  agentMap.get(
+                    String(
+                      row.agent_id ??
+                        ''
+                    )
+                  );
+
+                return mapOpenTab(
+                  row,
+                  agent?.name ??
+                    'Unknown',
+                  agent?.trustLevel ??
+                    'unknown'
+                );
+              }
+            )
+          );
+
+          /* ----------------------------------------------------
+             TRANSACTIONS
+          ---------------------------------------------------- */
+
+          const txnRows =
+            (txnsRes.data ??
+              []) as Record<
+              string,
+              unknown
+            >[];
+
+          setTransactions(
+            txnRows.map(
+              (row) => {
+                const agent =
+                  agentMap.get(
+                    String(
+                      row.agent_id ??
+                        ''
+                    )
+                  );
+
+                return mapTransaction(
+                  row,
+                  agent?.name ??
+                    'Unknown',
+                  agent?.trustLevel ??
+                    'unknown'
+                );
+              }
+            )
+          );
+
+          /* ----------------------------------------------------
+             LEDGER
+          ---------------------------------------------------- */
+
+          const ledgerRows =
+            (ledgerRes.data ??
+              []) as Record<
+              string,
+              unknown
+            >[];
+
+          setLedger(
+            ledgerRows.map(
+              mapLedger
+            )
+          );
+
+          /* ----------------------------------------------------
+             OPPORTUNITIES
+          ---------------------------------------------------- */
+
+          const opportunityRows =
+            (oppsRes.data ??
+              []) as Record<
+              string,
+              unknown
+            >[];
+
+          setOpportunities(
+            opportunityRows.map(
+              mapOpportunity
+            )
+          );
+
+          /* ----------------------------------------------------
+             POLICIES
+          ---------------------------------------------------- */
+
+          const policyRows =
+            (policiesRes.data ??
+              []) as Record<
+              string,
+              unknown
+            >[];
+
+          setPolicies(
+            policyRows.map(
+              mapPolicy
+            )
+          );
+
+          /* ----------------------------------------------------
+             ORGANIZATION
+          ---------------------------------------------------- */
+
+          if (
+            orgRes.data
+          ) {
+            const org =
+              orgRes.data as Record<
+                string,
+                unknown
+              >;
+
+            setMerchant(
+              (previous) => ({
+                ...previous,
+
+                businessName:
+                  String(
+                    org.name ??
+                      previous.businessName ??
+                      ''
+                  ),
+
+                industry:
+                  String(
+                    org.industry ??
+                      previous.industry ??
+                      ''
+                  ),
+
+                storeUrl:
+                  String(
+                    org.store_url ??
+                      previous.storeUrl ??
+                      ''
+                  ),
+
+                contactEmail:
+                  String(
+                    org.contact_email ??
+                      previous.contactEmail ??
+                      ''
+                  ),
+
+                onboardingComplete:
+                  true,
+              })
+            );
+          }
+        } catch (error) {
+          console.error(
+            'refreshData error:',
+            error
+          );
+        } finally {
+          refreshInProgress.current =
+            false;
         }
-      } catch (error) {
-        console.error(
-          'refreshData error:',
-          error
-        );
-      }
-    },
-    [
-      getCurrentOrganizationId,
-      clearData,
-    ]
-  );
+      },
+      [
+        getCurrentOrganizationId,
+        clearData,
+      ]
+    );
 
   /* ============================================================
-     AUTH
+     AUTH INITIALIZATION
   ============================================================ */
 
   useEffect(() => {
     let mounted = true;
 
-    const initialize = async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+    const initializeAuth =
+      async () => {
+        try {
+          const {
+            data: {
+              session,
+            },
+            error,
+          } =
+            await supabase.auth.getSession();
 
-        if (!mounted) return;
+          if (!mounted) {
+            return;
+          }
 
-        if (session) {
-          setAuthed(true);
+          if (error) {
+            console.error(
+              'Session lookup error:',
+              error
+            );
 
-          organizationIdRef.current =
-            null;
+            setAuthed(false);
+            clearData();
 
-          await refreshData();
-        } else {
-          setAuthed(false);
-          clearData();
+            return;
+          }
+
+          if (session) {
+            setAuthed(true);
+
+            organizationIdRef.current =
+              null;
+
+            await refreshData();
+          } else {
+            setAuthed(false);
+            clearData();
+          }
+        } catch (error) {
+          console.error(
+            'Auth initialization error:',
+            error
+          );
+
+          if (mounted) {
+            setAuthed(false);
+            clearData();
+          }
+        } finally {
+          if (mounted) {
+            setLoading(false);
+          }
         }
-      } catch (error) {
-        console.error(
-          'Auth initialization error:',
-          error
-        );
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    };
+      };
 
-    void initialize();
+    void initializeAuth();
 
     const {
-      data: listener,
+      data: authListener,
     } =
       supabase.auth.onAuthStateChange(
         (
-          _event: AuthChangeEvent,
-          session: Session | null
+          _event,
+          session
         ) => {
+          if (!mounted) {
+            return;
+          }
+
           if (!session) {
             setAuthed(false);
             clearData();
@@ -1162,78 +1577,98 @@ export function AppProvider({
           organizationIdRef.current =
             null;
 
+          /*
+           * Do not perform Supabase calls directly
+           * inside onAuthStateChange.
+           */
           window.setTimeout(() => {
-            void refreshData();
+            if (mounted) {
+              void refreshData();
+            }
           }, 0);
         }
       );
 
     return () => {
       mounted = false;
-      listener.subscription.unsubscribe();
+
+      authListener.subscription.unsubscribe();
     };
-  }, [refreshData, clearData]);
+  }, [
+    clearData,
+    refreshData,
+  ]);
 
   /* ============================================================
      REALTIME
   ============================================================ */
 
   useEffect(() => {
-    if (!authed) return;
+    if (!authed) {
+      return;
+    }
 
-    const channel = supabase
-      .channel(
-        `merchantos-realtime-${Date.now()}`
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'transaction_requests',
-        },
-        () => {
-          void refreshData();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'transactions',
-        },
-        () => {
-          void refreshData();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'open_tabs',
-        },
-        () => {
-          void refreshData();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'trust_ledger_events',
-        },
-        () => {
-          void refreshData();
-        }
-      )
-      .subscribe();
+    const channel =
+      supabase
+        .channel(
+          `merchantos-realtime-${uid(
+            'channel'
+          )}`
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table:
+              'transaction_requests',
+          },
+          () => {
+            void refreshData();
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table:
+              'transactions',
+          },
+          () => {
+            void refreshData();
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'open_tabs',
+          },
+          () => {
+            void refreshData();
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table:
+              'trust_ledger_events',
+          },
+          () => {
+            void refreshData();
+          }
+        )
+        .subscribe();
 
-    realtimeChannels.current.push(
-      channel
-    );
+    realtimeChannels.current =
+      [
+        ...realtimeChannels.current,
+        channel,
+      ];
 
     return () => {
       void supabase.removeChannel(
@@ -1242,99 +1677,129 @@ export function AppProvider({
 
       realtimeChannels.current =
         realtimeChannels.current.filter(
-          (item) => item !== channel
+          (item) =>
+            item !== channel
         );
     };
-  }, [authed, refreshData]);
+  }, [
+    authed,
+    refreshData,
+  ]);
 
   /* ============================================================
      MERCHANT
   ============================================================ */
 
-  const updateMerchant = useCallback(
-    (
-      patch: Partial<MerchantProfile>
-    ) => {
-      setMerchant((previous) => ({
-        ...previous,
-        ...patch,
-      }));
-    },
-    []
-  );
+  const updateMerchant =
+    useCallback(
+      (
+        patch: Partial<MerchantProfile>
+      ) => {
+        setMerchant(
+          (previous) => ({
+            ...previous,
+            ...patch,
+          })
+        );
+      },
+      []
+    );
 
   /* ============================================================
      POLICY
   ============================================================ */
 
-  const updatePolicy = useCallback(
-    (
-      id: string,
-      patch: Partial<Policy>
-    ) => {
-      setPolicies((previous) =>
-        previous.map((policy) =>
-          policy.id === id
-            ? {
-                ...policy,
-                ...patch,
-              }
-            : policy
-        )
-      );
-    },
-    []
-  );
+  const updatePolicy =
+    useCallback(
+      (
+        id: string,
+        patch: Partial<Policy>
+      ) => {
+        setPolicies(
+          (previous) =>
+            previous.map(
+              (policy) =>
+                policy.id === id
+                  ? {
+                      ...policy,
+                      ...patch,
+                    }
+                  : policy
+            )
+        );
+      },
+      []
+    );
 
-  const togglePolicy = useCallback(
-    async (id: string) => {
-      const policy = policies.find(
-        (item) => item.id === id
-      );
+  const togglePolicy =
+    useCallback(
+      async (id: string) => {
+        const policy =
+          policies.find(
+            (item) =>
+              item.id === id
+          );
 
-      if (!policy) return;
+        if (!policy) {
+          return;
+        }
 
-      const enabled = !policy.enabled;
+        const enabled =
+          !policy.enabled;
 
-      setPolicies((previous) =>
-        previous.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                enabled,
-              }
-            : item
-        )
-      );
-
-      const { error } = await supabase
-        .from('policies')
-        .update({ enabled })
-        .eq('id', id);
-
-      if (error) {
-        setPolicies((previous) =>
-          previous.map((item) =>
-            item.id === id
-              ? {
-                  ...item,
-                  enabled:
-                    policy.enabled,
-                }
-              : item
-          )
+        setPolicies(
+          (previous) =>
+            previous.map(
+              (item) =>
+                item.id === id
+                  ? {
+                      ...item,
+                      enabled,
+                    }
+                  : item
+            )
         );
 
-        pushToast({
-          type: 'error',
-          title:
-            'Policy update failed',
-          message: error.message,
-        });
-      }
-    },
-    [policies, pushToast]
-  );
+        const { error } =
+          await supabase
+            .from('policies')
+            .update({
+              enabled,
+            })
+            .eq(
+              'id',
+              id
+            );
+
+        if (error) {
+          setPolicies(
+            (previous) =>
+              previous.map(
+                (item) =>
+                  item.id === id
+                    ? {
+                        ...item,
+                        enabled:
+                          policy.enabled,
+                      }
+                    : item
+              )
+          );
+
+          pushToast({
+            type: 'error',
+            title:
+              'Policy update failed',
+            message:
+              error.message,
+          });
+        }
+      },
+      [
+        policies,
+        pushToast,
+      ]
+    );
 
   /* ============================================================
      OPPORTUNITY
@@ -1346,15 +1811,23 @@ export function AppProvider({
         id: string,
         status: GrowthOpportunity['status']
       ) => {
-        setOpportunities((previous) =>
-          previous.map((item) =>
-            item.id === id
-              ? {
-                  ...item,
-                  status,
-                }
-              : item
-          )
+        const previous =
+          opportunities.find(
+            (item) =>
+              item.id === id
+          );
+
+        setOpportunities(
+          (items) =>
+            items.map(
+              (item) =>
+                item.id === id
+                  ? {
+                      ...item,
+                      status,
+                    }
+                  : item
+            )
         );
 
         const { error } =
@@ -1362,8 +1835,13 @@ export function AppProvider({
             .from(
               'revenue_opportunities'
             )
-            .update({ status })
-            .eq('id', id);
+            .update({
+              status,
+            })
+            .eq(
+              'id',
+              id
+            );
 
         if (error) {
           console.error(
@@ -1371,10 +1849,31 @@ export function AppProvider({
             error
           );
 
-          void refreshData();
+          if (previous) {
+            setOpportunities(
+              (items) =>
+                items.map(
+                  (item) =>
+                    item.id === id
+                      ? previous
+                      : item
+                )
+            );
+          }
+
+          pushToast({
+            type: 'error',
+            title:
+              'Opportunity update failed',
+            message:
+              error.message,
+          });
         }
       },
-      [refreshData]
+      [
+        opportunities,
+        pushToast,
+      ]
     );
 
   /* ============================================================
@@ -1389,25 +1888,33 @@ export function AppProvider({
       ) => {
         const previousAgent =
           agents.find(
-            (agent) => agent.id === id
+            (agent) =>
+              agent.id === id
           );
 
-        setAgents((previous) =>
-          previous.map((agent) =>
-            agent.id === id
-              ? {
-                  ...agent,
-                  status,
-                }
-              : agent
-          )
+        setAgents(
+          (previous) =>
+            previous.map(
+              (agent) =>
+                agent.id === id
+                  ? {
+                      ...agent,
+                      status,
+                    }
+                  : agent
+            )
         );
 
         const { error } =
           await supabase
             .from('agents')
-            .update({ status })
-            .eq('id', id);
+            .update({
+              status,
+            })
+            .eq(
+              'id',
+              id
+            );
 
         if (error) {
           console.error(
@@ -1416,17 +1923,30 @@ export function AppProvider({
           );
 
           if (previousAgent) {
-            setAgents((previous) =>
-              previous.map((agent) =>
-                agent.id === id
-                  ? previousAgent
-                  : agent
-              )
+            setAgents(
+              (previous) =>
+                previous.map(
+                  (agent) =>
+                    agent.id === id
+                      ? previousAgent
+                      : agent
+                )
             );
           }
+
+          pushToast({
+            type: 'error',
+            title:
+              'Agent status update failed',
+            message:
+              error.message,
+          });
         }
       },
-      [agents]
+      [
+        agents,
+        pushToast,
+      ]
     );
 
   /* ============================================================
@@ -1441,13 +1961,15 @@ export function AppProvider({
           'id'
         >
       ) => {
-        setLedger((previous) => [
-          {
-            ...event,
-            id: uid('e'),
-          },
-          ...previous,
-        ]);
+        setLedger(
+          (previous) => [
+            {
+              ...event,
+              id: uid('e'),
+            },
+            ...previous,
+          ]
+        );
       },
       []
     );
@@ -1455,21 +1977,35 @@ export function AppProvider({
   /* ============================================================
      EDGE FUNCTION HELPER
      
-     IMPORTANT:
-     Uses PUBLISHABLE KEY.
-     No VITE_SUPABASE_ANON_KEY.
+     The Supabase client handles the publishable key.
+     The authenticated session is sent automatically.
   ============================================================ */
 
   const invokeFunction =
     useCallback(
       async <T,>(
         functionName: string,
-        body: Record<string, unknown>
+        body: Record<
+          string,
+          unknown
+        >
       ): Promise<T> => {
         const {
-          data: { session },
+          data: {
+            session,
+          },
+          error:
+            sessionError,
         } =
           await supabase.auth.getSession();
+
+        if (
+          sessionError
+        ) {
+          throw new Error(
+            sessionError.message
+          );
+        }
 
         if (!session) {
           throw new Error(
@@ -1509,10 +2045,10 @@ export function AppProvider({
       async (
         tab: Omit<
           OpenTab,
-          'id' |
-            'createdAt' |
-            'remaining' |
-            'status'
+          | 'id'
+          | 'createdAt'
+          | 'remaining'
+          | 'status'
         >
       ): Promise<OpenTab> => {
         const organizationId =
@@ -1526,11 +2062,13 @@ export function AppProvider({
 
         type CreateTabResponse = {
           success?: boolean;
+
           data?: {
             open_tab?: {
               id?: string;
             };
           };
+
           error?: {
             message?: string;
           };
@@ -1543,7 +2081,8 @@ export function AppProvider({
               organization_id:
                 organizationId,
 
-              agent_id: tab.agentId,
+              agent_id:
+                tab.agentId,
 
               name: tab.agentName
                 ? `${tab.agentName} Tab`
@@ -1570,37 +2109,47 @@ export function AppProvider({
           );
         }
 
-        const newTab: OpenTab = {
-          ...tab,
+        const newTab: OpenTab =
+          {
+            ...tab,
 
-          id: String(
-            result.data.open_tab.id
-          ),
+            id: String(
+              result.data.open_tab.id
+            ),
 
-          remaining: tab.cap,
+            remaining:
+              tab.cap,
 
-          status: 'active',
+            status:
+              'active',
 
-          createdAt: 'Just now',
-        };
+            createdAt:
+              'Just now',
+          };
 
-        setOpenTabs((previous) => [
-          newTab,
-          ...previous,
-        ]);
+        setOpenTabs(
+          (previous) => [
+            newTab,
+            ...previous,
+          ]
+        );
 
         addLedgerEvent({
           time: 'Just now',
 
-          what: 'OpenTab activated',
+          what:
+            'OpenTab activated',
 
           why: `New OpenTab created for ${tab.agentName}`,
 
-          who: tab.agentName,
+          who:
+            tab.agentName,
 
-          whoType: 'merchant',
+          whoType:
+            'merchant',
 
-          policy: 'opentab-scope',
+          policy:
+            'opentab-scope',
         });
 
         return newTab;
@@ -1624,36 +2173,45 @@ export function AppProvider({
             .from('open_tabs')
             .update({
               status: 'paused',
+
               paused_at:
                 new Date().toISOString(),
             })
-            .eq('id', id);
+            .eq(
+              'id',
+              id
+            );
 
         if (error) {
           pushToast({
             type: 'error',
             title:
               'Unable to pause OpenTab',
-            message: error.message,
+            message:
+              error.message,
           });
 
           return;
         }
 
-        setOpenTabs((previous) =>
-          previous.map((tab) =>
-            tab.id === id
-              ? {
-                  ...tab,
-                  status: 'paused',
-                }
-              : tab
-          )
+        setOpenTabs(
+          (previous) =>
+            previous.map(
+              (tab) =>
+                tab.id === id
+                  ? {
+                      ...tab,
+                      status:
+                        'paused',
+                    }
+                  : tab
+            )
         );
 
         pushToast({
           type: 'info',
-          title: 'OpenTab paused',
+          title:
+            'OpenTab paused',
           message:
             'The agent can no longer request transactions.',
         });
@@ -1673,38 +2231,50 @@ export function AppProvider({
             .from('open_tabs')
             .update({
               status: 'revoked',
-              remaining_amount: 0,
+
+              remaining_amount:
+                0,
+
               revoked_at:
                 new Date().toISOString(),
             })
-            .eq('id', id);
+            .eq(
+              'id',
+              id
+            );
 
         if (error) {
           pushToast({
             type: 'error',
             title:
               'Unable to revoke OpenTab',
-            message: error.message,
+            message:
+              error.message,
           });
 
           return;
         }
 
-        setOpenTabs((previous) =>
-          previous.map((tab) =>
-            tab.id === id
-              ? {
-                  ...tab,
-                  status: 'revoked',
-                  remaining: 0,
-                }
-              : tab
-          )
+        setOpenTabs(
+          (previous) =>
+            previous.map(
+              (tab) =>
+                tab.id === id
+                  ? {
+                      ...tab,
+                      status:
+                        'revoked',
+                      remaining:
+                        0,
+                    }
+                  : tab
+            )
         );
 
         pushToast({
           type: 'warning',
-          title: 'OpenTab revoked',
+          title:
+            'OpenTab revoked',
           message:
             'All transaction authority has been removed.',
         });
@@ -1719,10 +2289,12 @@ export function AppProvider({
   const addTransaction =
     useCallback(
       (txn: Transaction) => {
-        setTransactions((previous) => [
-          txn,
-          ...previous,
-        ]);
+        setTransactions(
+          (previous) => [
+            txn,
+            ...previous,
+          ]
+        );
       },
       []
     );
@@ -1752,6 +2324,7 @@ export function AppProvider({
 
           type Result = {
             success?: boolean;
+
             error?: {
               message?: string;
             };
@@ -1761,7 +2334,9 @@ export function AppProvider({
             await invokeFunction<Result>(
               'approve-transaction',
               {
-                transaction_id: id,
+                transaction_id:
+                  id,
+
                 organization_id:
                   organizationId,
               }
@@ -1795,7 +2370,8 @@ export function AppProvider({
             title:
               'Approval failed',
             message:
-              error instanceof Error
+              error instanceof
+                Error
                 ? error.message
                 : 'Unexpected error.',
           });
@@ -1834,6 +2410,7 @@ export function AppProvider({
 
           type Result = {
             success?: boolean;
+
             error?: {
               message?: string;
             };
@@ -1843,7 +2420,9 @@ export function AppProvider({
             await invokeFunction<Result>(
               'decline-transaction',
               {
-                transaction_id: id,
+                transaction_id:
+                  id,
+
                 organization_id:
                   organizationId,
               }
@@ -1877,7 +2456,8 @@ export function AppProvider({
             title:
               'Decline failed',
             message:
-              error instanceof Error
+              error instanceof
+                Error
                 ? error.message
                 : 'Unexpected error.',
           });
@@ -1899,17 +2479,24 @@ export function AppProvider({
     useCallback(
       async (params: {
         agentId: string;
+
         products: {
           name: string;
           price: number;
         }[];
+
         openTabId?: string;
       }) => {
         const amount =
           params.products.reduce(
-            (sum, product) =>
+            (
+              sum,
+              product
+            ) =>
               sum +
-              Number(product.price || 0),
+              Number(
+                product.price || 0
+              ),
             0
           );
 
@@ -1918,49 +2505,70 @@ export function AppProvider({
             .toString(36)
             .slice(2, 10)}`;
 
-        const stages: TxnStage[] = [
-          {
-            id: 's1',
-            label: 'Agent Request',
-            status: 'pending',
-            detail: `Agent requested purchase of ${params.products
-              .map((p) => p.name)
-              .join(', ')}`,
-          },
-          {
-            id: 's2',
-            label:
-              'Identity Verification',
-            status: 'pending',
-          },
-          {
-            id: 's3',
-            label: 'Catalog Validation',
-            status: 'pending',
-          },
-          {
-            id: 's4',
-            label: 'Policy Check',
-            status: 'pending',
-          },
-          {
-            id: 's5',
-            label:
-              'OpenTab Validation',
-            status: 'pending',
-          },
-          {
-            id: 's6',
-            label: 'Payment Initiated',
-            status: 'pending',
-          },
-          {
-            id: 's7',
-            label:
-              'Payment Confirmed',
-            status: 'pending',
-          },
-        ];
+        const stages: TxnStage[] =
+          [
+            {
+              id: 's1',
+              label:
+                'Agent Request',
+              status:
+                'pending',
+              detail: `Agent requested purchase of ${params.products
+                .map(
+                  (product) =>
+                    product.name
+                )
+                .join(', ')}`,
+            },
+
+            {
+              id: 's2',
+              label:
+                'Identity Verification',
+              status:
+                'pending',
+            },
+
+            {
+              id: 's3',
+              label:
+                'Catalog Validation',
+              status:
+                'pending',
+            },
+
+            {
+              id: 's4',
+              label:
+                'Policy Check',
+              status:
+                'pending',
+            },
+
+            {
+              id: 's5',
+              label:
+                'OpenTab Validation',
+              status:
+                'pending',
+            },
+
+            {
+              id: 's6',
+              label:
+                'Payment Initiated',
+              status:
+                'pending',
+            },
+
+            {
+              id: 's7',
+              label:
+                'Payment Confirmed',
+              status:
+                'pending',
+            },
+          ];
 
         try {
           const organizationId =
@@ -1970,16 +2578,20 @@ export function AppProvider({
             return {
               decision:
                 'declined' as TxnDecision,
+
               reason:
                 'No merchant organization was found for this account.',
+
               stages,
+
               amount,
             };
           }
 
           stages[0] = {
             ...stages[0],
-            status: 'passed',
+            status:
+              'passed',
           };
 
           type EvaluationResult = {
@@ -1987,6 +2599,7 @@ export function AppProvider({
 
             data?: {
               decision?: TxnDecision;
+
               reason?: string;
 
               checks?: Array<{
@@ -1996,6 +2609,7 @@ export function AppProvider({
               }>;
 
               transaction_id?: string;
+
               transaction_request_id?: string;
             };
 
@@ -2021,7 +2635,8 @@ export function AppProvider({
                   idempotencyKey,
 
                 open_tab_id:
-                  params.openTabId ?? null,
+                  params.openTabId ??
+                  null,
               }
             );
 
@@ -2040,105 +2655,151 @@ export function AppProvider({
             };
           }
 
-          const data = result.data;
+          const data =
+            result.data;
 
           const decision: TxnDecision =
-            data.decision === 'approved' ||
-            data.decision === 'declined' ||
-            data.decision === 'escalated'
+            data.decision ===
+              'approved' ||
+            data.decision ===
+              'declined' ||
+            data.decision ===
+              'escalated'
               ? data.decision
               : 'declined';
 
           const checks =
             data.checks ?? [];
 
-          checks.forEach((check) => {
-            const label =
-              String(
-                check.label ?? ''
-              ).toLowerCase();
+          checks.forEach(
+            (check) => {
+              const label =
+                String(
+                  check.label ??
+                    ''
+                ).toLowerCase();
 
-            let index = -1;
+              let index = -1;
 
-            if (
-              label.includes('identity')
-            ) {
-              index = 1;
-            } else if (
-              label.includes('catalog')
-            ) {
-              index = 2;
-            } else if (
-              label.includes('policy')
-            ) {
-              index = 3;
-            } else if (
-              label.includes('opentab') ||
-              label.includes('open tab')
-            ) {
-              index = 4;
-            } else if (
-              label.includes('payment')
-            ) {
-              index = 5;
+              if (
+                label.includes(
+                  'identity'
+                )
+              ) {
+                index = 1;
+              } else if (
+                label.includes(
+                  'catalog'
+                )
+              ) {
+                index = 2;
+              } else if (
+                label.includes(
+                  'policy'
+                )
+              ) {
+                index = 3;
+              } else if (
+                label.includes(
+                  'opentab'
+                ) ||
+                label.includes(
+                  'open tab'
+                )
+              ) {
+                index = 4;
+              } else if (
+                label.includes(
+                  'payment'
+                )
+              ) {
+                index = 5;
+              }
+
+              if (index >= 0) {
+                stages[index] =
+                  {
+                    ...stages[index],
+
+                    status:
+                      check.passed
+                        ? 'passed'
+                        : 'failed',
+
+                    detail:
+                      check.detail ??
+                      '',
+                  };
+              }
             }
+          );
 
-            if (index >= 0) {
-              stages[index] = {
-                ...stages[index],
-
-                status:
-                  check.passed
-                    ? 'passed'
-                    : 'failed',
-
-                detail:
-                  check.detail ?? '',
-              };
-            }
-          });
-
-          if (decision === 'approved') {
+          if (
+            decision ===
+            'approved'
+          ) {
             stages[5] = {
               ...stages[5],
-              status: 'passed',
+
+              status:
+                'passed',
+
               detail:
                 'Payment handed to provider.',
             };
 
             stages[6] = {
               ...stages[6],
-              status: 'passed',
+
+              status:
+                'passed',
+
               detail:
                 'Payment provider confirmed.',
             };
           }
 
-          if (decision === 'escalated') {
+          if (
+            decision ===
+            'escalated'
+          ) {
             stages[5] = {
               ...stages[5],
-              status: 'skipped',
+
+              status:
+                'skipped',
+
               detail:
                 'Waiting for merchant approval.',
             };
 
             stages[6] = {
               ...stages[6],
-              status: 'skipped',
+
+              status:
+                'skipped',
+
               detail:
                 'Waiting for merchant approval.',
             };
           }
 
-          if (decision === 'declined') {
+          if (
+            decision ===
+            'declined'
+          ) {
             stages[5] = {
               ...stages[5],
-              status: 'skipped',
+
+              status:
+                'skipped',
             };
 
             stages[6] = {
               ...stages[6],
-              status: 'skipped',
+
+              status:
+                'skipped',
             };
           }
 
@@ -2171,7 +2832,8 @@ export function AppProvider({
               'declined' as TxnDecision,
 
             reason:
-              error instanceof Error
+              error instanceof
+                Error
                 ? error.message
                 : 'Unexpected transaction error.',
 
@@ -2192,73 +2854,116 @@ export function AppProvider({
      SIGN OUT
   ============================================================ */
 
-  const signOut = useCallback(
-    async () => {
-      await supabase.auth.signOut();
+  const signOut =
+    useCallback(
+      async () => {
+        try {
+          const {
+            error,
+          } =
+            await supabase.auth.signOut();
 
-      clearData();
+          if (error) {
+            throw error;
+          }
 
-      setAuthed(false);
-    },
-    [clearData]
-  );
+          clearData();
+          setAuthed(false);
+        } catch (error) {
+          console.error(
+            'Sign out error:',
+            error
+          );
+
+          pushToast({
+            type: 'error',
+            title:
+              'Sign out failed',
+            message:
+              error instanceof
+                Error
+                ? error.message
+                : 'Unable to sign out.',
+          });
+
+          throw error;
+        }
+      },
+      [
+        clearData,
+        pushToast,
+      ]
+    );
 
   /* ============================================================
      CONTEXT VALUE
   ============================================================ */
 
-  const value: AppContextValue = {
-    merchant,
-    agents,
-    products,
-    openTabs,
-    transactions,
-    ledger,
-    opportunities,
-    policies,
-    toasts,
-    authed,
-    loading,
+  const value: AppContextValue =
+    {
+      merchant,
 
-    setAuthed,
+      agents,
 
-    updateMerchant,
+      products,
 
-    updatePolicy,
+      openTabs,
 
-    togglePolicy,
+      transactions,
 
-    setOpportunityStatus,
+      ledger,
 
-    setAgentStatus,
+      opportunities,
 
-    createOpenTab,
+      policies,
 
-    pauseOpenTab,
+      toasts,
 
-    revokeOpenTab,
+      authed,
 
-    addTransaction,
+      loading,
 
-    approveEscalatedTransaction,
+      setAuthed,
 
-    declineEscalatedTransaction,
+      updateMerchant,
 
-    pushToast,
+      updatePolicy,
 
-    dismissToast,
+      togglePolicy,
 
-    addLedgerEvent,
+      setOpportunityStatus,
 
-    evaluateTransaction,
+      setAgentStatus,
 
-    signOut,
+      createOpenTab,
 
-    refreshData,
-  };
+      pauseOpenTab,
+
+      revokeOpenTab,
+
+      addTransaction,
+
+      approveEscalatedTransaction,
+
+      declineEscalatedTransaction,
+
+      pushToast,
+
+      dismissToast,
+
+      addLedgerEvent,
+
+      evaluateTransaction,
+
+      signOut,
+
+      refreshData,
+    };
 
   return (
-    <AppContext.Provider value={value}>
+    <AppContext.Provider
+      value={value}
+    >
       {children}
     </AppContext.Provider>
   );

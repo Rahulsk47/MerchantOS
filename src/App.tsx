@@ -1,10 +1,18 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+} from 'react-router-dom';
+
+import { useEffect, useState } from 'react';
+
 import { AppProvider } from '@/lib/store';
+import { supabase } from '@/lib/supabase';
 
 import LandingPage from '@/pages/LandingPage';
 import SignInPage from '@/pages/SignInPage';
 import SignUpPage from '@/pages/SignUpPage';
-import OnboardingPage from '@/pages/OnboardingPage';
 
 import { AppLayout } from '@/components/app/AppLayout';
 
@@ -19,62 +27,109 @@ import TrustLedgerPage from '@/pages/app/TrustLedgerPage';
 import PoliciesPage from '@/pages/app/PoliciesPage';
 import SettingsPage from '@/pages/app/SettingsPage';
 
-import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+/* ============================================================
+   EMAIL AUTH CALLBACK
+============================================================ */
 
 function AuthCallbackPage() {
-  const [message, setMessage] = useState('Verifying your account...');
+  const [message, setMessage] = useState(
+    'Verifying your account...'
+  );
 
   useEffect(() => {
     let mounted = true;
+    let redirectTimer: number | undefined;
 
     const handleCallback = async () => {
       try {
-        /*
-         * Supabase puts the authentication information
-         * in the URL after email verification.
-         *
-         * getSession() reads the session created by Supabase.
-         */
-        const { data, error } = await supabase.auth.getSession();
+        const {
+          data,
+          error,
+        } = await supabase.auth.getSession();
 
         if (!mounted) return;
 
         if (error) {
-          setMessage(
-            'Verification failed. Please try signing in again.'
+          console.error(
+            'Auth callback error:',
+            error
           );
+
+          setMessage(
+            'Verification failed. Please sign in again.'
+          );
+
+          redirectTimer = window.setTimeout(() => {
+            if (mounted) {
+              window.location.replace('/signin');
+            }
+          }, 1500);
+
           return;
         }
 
+        /*
+         * If Supabase created a session after email
+         * verification, go directly to the dashboard.
+         *
+         * IMPORTANT:
+         * We intentionally DO NOT redirect to /onboarding.
+         */
         if (data.session) {
-          setMessage('Email verified. Opening MerchantOS...');
-
-          setTimeout(() => {
-            window.location.replace('/onboarding');
-          }, 500);
-        } else {
           setMessage(
-            'Email verified. Please sign in to continue.'
+            'Email verified. Opening MerchantOS...'
           );
 
-          setTimeout(() => {
-            window.location.replace('/signin');
-          }, 1200);
+          redirectTimer = window.setTimeout(() => {
+            if (mounted) {
+              window.location.replace('/app');
+            }
+          }, 500);
+
+          return;
         }
-      } catch {
+
+        /*
+         * No session means the user still needs to
+         * sign in manually.
+         */
+        setMessage(
+          'Email verified. Please sign in to continue.'
+        );
+
+        redirectTimer = window.setTimeout(() => {
+          if (mounted) {
+            window.location.replace('/signin');
+          }
+        }, 1200);
+      } catch (error) {
+        console.error(
+          'Auth callback exception:',
+          error
+        );
+
         if (!mounted) return;
 
         setMessage(
-          'Something went wrong. Please return to MerchantOS and sign in.'
+          'Something went wrong. Please sign in again.'
         );
+
+        redirectTimer = window.setTimeout(() => {
+          if (mounted) {
+            window.location.replace('/signin');
+          }
+        }, 1500);
       }
     };
 
-    handleCallback();
+    void handleCallback();
 
     return () => {
       mounted = false;
+
+      if (redirectTimer) {
+        window.clearTimeout(redirectTimer);
+      }
     };
   }, []);
 
@@ -97,19 +152,29 @@ function AuthCallbackPage() {
   );
 }
 
+/* ============================================================
+   APP ROUTER
+============================================================ */
+
 export default function App() {
   return (
     <AppProvider>
       <BrowserRouter>
         <Routes>
 
-          {/* PUBLIC LANDING */}
+          {/* ==================================================
+              PUBLIC LANDING
+          ================================================== */}
+
           <Route
             path="/"
             element={<LandingPage />}
           />
 
-          {/* AUTH */}
+          {/* ==================================================
+              AUTH
+          ================================================== */}
+
           <Route
             path="/signin"
             element={<SignInPage />}
@@ -120,19 +185,19 @@ export default function App() {
             element={<SignUpPage />}
           />
 
-          {/* EMAIL VERIFICATION CALLBACK */}
+          {/* ==================================================
+              EMAIL VERIFICATION
+          ================================================== */}
+
           <Route
             path="/auth/callback"
             element={<AuthCallbackPage />}
           />
 
-          {/* ONBOARDING */}
-          <Route
-            path="/onboarding"
-            element={<OnboardingPage />}
-          />
+          {/* ==================================================
+              MERCHANTOS APPLICATION
+          ================================================== */}
 
-          {/* APP */}
           <Route
             path="/app"
             element={
@@ -223,10 +288,35 @@ export default function App() {
             }
           />
 
-          {/* FALLBACK */}
+          {/* ==================================================
+              OLD ONBOARDING URL
+              
+              Keep this route so an old bookmark/link does not
+              break. It now sends the user to the dashboard.
+          ================================================== */}
+
+          <Route
+            path="/onboarding"
+            element={
+              <Navigate
+                to="/app"
+                replace
+              />
+            }
+          />
+
+          {/* ==================================================
+              FALLBACK
+          ================================================== */}
+
           <Route
             path="*"
-            element={<Navigate to="/" replace />}
+            element={
+              <Navigate
+                to="/"
+                replace
+              />
+            }
           />
 
         </Routes>
