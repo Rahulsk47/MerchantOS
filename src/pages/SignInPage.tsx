@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowRight, ArrowLeft } from 'lucide-react';
-
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -32,12 +31,14 @@ export default function SignInPage() {
 
     const trimmedEmail = email.trim();
 
+    // Validate email
     if (!trimmedEmail) {
       errs.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(trimmedEmail)) {
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       errs.email = 'Enter a valid email';
     }
 
+    // Validate password
     if (!password) {
       errs.password = 'Password is required';
     } else if (password.length < 6) {
@@ -54,7 +55,7 @@ export default function SignInPage() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: trimmedEmail,
         password,
       });
@@ -64,7 +65,15 @@ export default function SignInPage() {
         return;
       }
 
-      navigate('/app');
+      if (!data.session) {
+        setAuthError(
+          'Unable to create a session. Please verify your email and try again.'
+        );
+        return;
+      }
+
+      // Existing user successfully signed in
+      navigate('/app', { replace: true });
     } catch (error) {
       setAuthError(
         error instanceof Error
@@ -173,11 +182,11 @@ export default function SignInPage() {
               <button
                 type="button"
                 className="text-electric-400 hover:text-electric-300"
-                onClick={() => {
+                onClick={() =>
                   setAuthError(
                     'Password reset is not configured yet.'
-                  );
-                }}
+                  )
+                }
               >
                 Forgot password?
               </button>

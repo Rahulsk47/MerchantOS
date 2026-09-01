@@ -9,7 +9,6 @@ import {
   ArrowLeft,
   CheckCircle2,
 } from 'lucide-react';
-
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -36,15 +35,16 @@ export default function SignUpPage() {
     const errs: Record<string, string> = {};
 
     const name = form.name.trim();
-    const email = form.email.trim();
+    const email = form.email.trim().toLowerCase();
 
+    // Validation
     if (!name) {
       errs.name = 'Name is required';
     }
 
     if (!email) {
       errs.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(email)) {
+    } else if (!/^\S+@\S+\.\S+$/.test(email)) {
       errs.email = 'Enter a valid email';
     }
 
@@ -71,6 +71,16 @@ export default function SignUpPage() {
     setLoading(true);
 
     try {
+      /*
+       * IMPORTANT:
+       *
+       * After the user verifies their email,
+       * Supabase redirects them back to /auth/callback.
+       *
+       * This works both locally and on Vercel.
+       */
+      const redirectUrl = `${window.location.origin}/auth/callback`;
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password: form.password,
@@ -78,6 +88,7 @@ export default function SignUpPage() {
           data: {
             full_name: name,
           },
+          emailRedirectTo: redirectUrl,
         },
       });
 
@@ -87,24 +98,25 @@ export default function SignUpPage() {
       }
 
       /*
-       * If Supabase email confirmation is enabled,
-       * data.session will be null and the user must
-       * verify their email first.
+       * EMAIL CONFIRMATION ENABLED
+       *
+       * Supabase returns a user but no session.
+       * User must click the verification email.
        */
       if (data.user && !data.session) {
         setSuccessMessage(
-          'Account created successfully. Please check your email to verify your account.'
+          'Account created successfully. Check your email and click the verification link to continue.'
         );
-
         return;
       }
 
       /*
-       * If email confirmation is disabled,
-       * Supabase creates an active session immediately.
+       * EMAIL CONFIRMATION DISABLED
+       *
+       * User gets a session immediately.
        */
       if (data.user && data.session) {
-        navigate('/onboarding');
+        navigate('/onboarding', { replace: true });
       }
     } catch (error) {
       setAuthError(
@@ -119,7 +131,7 @@ export default function SignUpPage() {
 
   return (
     <div className="min-h-screen flex">
-      {/* Left panel */}
+      {/* LEFT PANEL */}
       <div className="hidden lg:flex flex-1 relative bg-ink-900 items-center justify-center p-12 overflow-hidden">
         <div className="absolute inset-0 bg-grid-faint opacity-30" />
         <div className="absolute inset-0 bg-radial-fade" />
@@ -149,13 +161,14 @@ export default function SignUpPage() {
         </div>
       </div>
 
-      {/* Sign up */}
+      {/* SIGN UP PANEL */}
       <div className="flex-1 flex items-center justify-center p-6">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-sm"
         >
+          {/* MOBILE LOGO */}
           <div className="lg:hidden mb-8">
             <Logo />
           </div>
@@ -168,18 +181,33 @@ export default function SignUpPage() {
             Start building your AI commerce workspace.
           </p>
 
+          {/* ERROR */}
           {authError && (
             <div className="mt-4 p-3 rounded-xl bg-danger-500/10 border border-danger-500/30 text-danger-300 text-sm">
               {authError}
             </div>
           )}
 
+          {/* SUCCESS */}
           {successMessage && (
-            <div className="mt-4 p-3 rounded-xl bg-success-500/10 border border-success-500/30 text-success-300 text-sm">
-              {successMessage}
+            <div className="mt-4 p-4 rounded-xl bg-success-500/10 border border-success-500/30 text-success-300 text-sm">
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
+
+                <div>
+                  <p className="font-medium">
+                    Check your email
+                  </p>
+
+                  <p className="mt-1 text-success-300/80">
+                    {successMessage}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
 
+          {/* FORM */}
           <form onSubmit={handleSubmit} className="mt-8 space-y-4">
             <Input
               label="Full name"
@@ -260,6 +288,7 @@ export default function SignUpPage() {
             </Button>
           </form>
 
+          {/* SIGN IN */}
           <p className="mt-6 text-center text-sm text-ink-400">
             Already have an account?{' '}
             <Link
@@ -270,6 +299,7 @@ export default function SignUpPage() {
             </Link>
           </p>
 
+          {/* HOME */}
           <div className="mt-6 flex items-center justify-center">
             <Link
               to="/"
